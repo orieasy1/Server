@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from app.domains.auth.router.auth_router import router as auth_router
+from app.domains.pets.router.register_router import router as pet_register_router
+
 
 def create_app() -> FastAPI:
     app = FastAPI(
@@ -10,6 +12,9 @@ def create_app() -> FastAPI:
 
     # 🟢 라우터 등록
     app.include_router(auth_router)
+
+    # Pets Register API
+    app.include_router(pet_register_router)
 
     @app.get("/")
     def root():

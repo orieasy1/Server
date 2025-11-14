@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, DECIMAL, Enum, ForeignKey
+from sqlalchemy import Column, Integer, Float, String, DateTime, DECIMAL, Enum, ForeignKey
 from sqlalchemy.sql import func
 from app.models.base import Base
 import enum
@@ -20,7 +20,7 @@ class Pet(Base):
     name = Column(String(50), nullable=False)
     breed = Column(String(50))
     age = Column(Integer)
-    weight = Column(DECIMAL(4, 1))
+    weight = Column(Float)
     gender = Column(Enum(PetGender), default=PetGender.Unknown)
 
     disease = Column(String(255))
