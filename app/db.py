@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.config import settings
+from app.core.config import settings
 
 # DB URL (env에서 불러오기)
 DATABASE_URL = settings.DATABASE_URL

@@ -13,7 +13,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 # ---------------------------------------------------------
 # ★ FastAPI 설정 파일(settings) 및 Base import
 # ---------------------------------------------------------
-from app.config import settings
+from app.core.config import settings
 from app.models import Base
 
 # ---------------------------------------------------------
