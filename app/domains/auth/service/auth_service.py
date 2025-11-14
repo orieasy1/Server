@@ -44,6 +44,16 @@ class AuthService:
         picture = decoded.get("picture")
         provider = decoded.get("firebase", {}).get("sign_in_provider")
 
+        # ⭐ provider → sns_id 변환
+        sns_provider_map = {
+            "google.com": 1,
+            "apple.com": 2,
+            "oidc.kakao": 3,
+            "custom": 3,
+            "password": 4
+        }
+        sns_id = sns_provider_map.get(provider, 0)
+
         # 3) 필수 필드 확인
         if not firebase_uid:
             return error_response(
@@ -79,11 +89,16 @@ class AuthService:
                 firebase_uid=firebase_uid,
                 nickname=nickname or f"user_{firebase_uid[:6]}",
                 email=email,
-                picture=picture
+                picture=picture,
+                sns_id=sns_id  # ⭐ 새로운 값 전달
             )
-        except:
+        except Exception as e:
+            db.rollback()
+            print("🔥 DB ERROR:", e)
             return error_response(
-                500, "AUTH_500_1", "데이터베이스 처리 중 오류가 발생했습니다.", request.url.path
+                500, "AUTH_500_1",
+                "데이터베이스 처리 중 오류가 발생했습니다.",
+                request.url.path
             )
 
         # 6) 응답

@@ -13,14 +13,16 @@ class AuthRepository:
             .first()
         )
 
-    def create_user(self, firebase_uid: str, nickname: str, email: str | None, picture: str | None):
-        new_user = User(
+    def create_user(self, firebase_uid, nickname, email, picture, sns_id):
+        user = User(
             firebase_uid=firebase_uid,
+            sns_id=sns_id,     # ⭐ 추가
             nickname=nickname,
             email=email,
             profile_img_url=picture
         )
-        self.db.add(new_user)
+        self.db.add(user)
         self.db.commit()
-        self.db.refresh(new_user)
-        return new_user
+        self.db.refresh(user)
+        return user
+
