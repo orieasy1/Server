@@ -91,3 +91,29 @@ def update_pet_image(
 ):
     service = PetModifyService(db)
     return service.update_pet_image(request, authorization, pet_id, body.image_url)
+
+
+@router.delete(
+    "/{pet_id}",
+    summary="반려동물 삭제",
+    status_code=200,
+    responses={
+        400: {"model": ErrorResponse},
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+def delete_pet(
+    pet_id: int,
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    service = PetModifyService(db)
+    return service.delete_pet(
+        request=request,
+        authorization=authorization,
+        pet_id=pet_id,
+    )

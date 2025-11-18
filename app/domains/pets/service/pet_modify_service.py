@@ -15,6 +15,12 @@ from app.core.error_handler import error_response
 from app.models.user import User
 from app.models.pet import Pet, PetGender
 from app.models.family_member import FamilyMember, MemberRole
+from app.models.walk import Walk
+from app.models.photo import Photo
+from app.models.pet_walk_goal import PetWalkGoal
+from app.models.pet_walk_recommendation import PetWalkRecommendation
+from app.models.pet_share_request import PetShareRequest
+from app.models.notification import Notification
 
 from app.domains.pets.repository.pet_repository import PetRepository
 from app.schemas.pets.pet_update_schema import PetUpdateRequest
@@ -286,6 +292,98 @@ class PetModifyService:
                     "success": True,
                     "status": 200,
                     "image_url": image_url,
+                    "timeStamp": datetime.utcnow().isoformat(),
+                    "path": path,
+                }
+            ),
+        )
+
+    # --------------------------------------------------
+    # 🔥 반려동물 삭제 (OWNER만 가능)
+    # --------------------------------------------------
+    def delete_pet(
+        self,
+        request: Request,
+        authorization: Optional[str],
+        pet_id: int
+    ):
+        path = request.url.path
+
+        # ========== Auth ==========
+        if authorization is None:
+            return error_response(401, "PET_DELETE_401_1", "Authorization 헤더가 필요합니다.", path)
+
+        if not authorization.startswith("Bearer "):
+            return error_response(401, "PET_DELETE_401_2", "Authorization 형식 오류", path)
+
+        decoded = verify_firebase_token(authorization.split(" ")[1])
+        if decoded is None:
+            return error_response(401, "PET_DELETE_401_3", "Firebase 토큰 검증 실패", path)
+
+        # user 조회
+        user = (
+            self.db.query(User)
+            .filter(User.firebase_uid == decoded["uid"])
+            .first()
+        )
+
+        if not user:
+            return error_response(404, "PET_DELETE_404_1", "사용자를 찾을 수 없습니다.", path)
+
+        # pet 조회
+        pet = self.repo.get_by_id(pet_id)
+        if not pet:
+            return error_response(404, "PET_DELETE_404_2", "반려동물을 찾을 수 없습니다.", path)
+
+        # 🔥 삭제 권한: 오직 OWNER
+        if pet.owner_id != user.user_id:
+            return error_response(403, "PET_DELETE_403_1", "OWNER만 반려동물을 삭제할 수 있습니다.", path)
+
+        # ---------------------------------------------------
+        # 🔥 연관 테이블 전체 삭제
+        # ---------------------------------------------------
+        try:
+            # 1. Walk → Photo 삭제
+            walks = self.db.query(Walk).filter(Walk.pet_id == pet_id).all()
+            for walk in walks:
+                self.db.query(Photo).filter(Photo.walk_id == walk.walk_id).delete()
+            self.db.query(Walk).filter(Walk.pet_id == pet_id).delete()
+
+            # 2. 산책 목표 삭제
+            self.db.query(PetWalkGoal).filter(PetWalkGoal.pet_id == pet_id).delete()
+
+            # 3. 산책 추천 삭제
+            self.db.query(PetWalkRecommendation)\
+                .filter(PetWalkRecommendation.pet_id == pet_id)\
+                .delete()
+
+            # 4. 공유 요청 삭제
+            self.db.query(PetShareRequest).filter(PetShareRequest.pet_id == pet_id).delete()
+
+            # 5. 알림 삭제
+            self.db.query(Notification).filter(Notification.related_pet_id == pet_id).delete()
+
+            # 6. 실제 Pet 삭제
+            self.db.delete(pet)
+
+            self.db.commit()
+
+        except Exception as e:
+            print("PET DELETE ERROR:", e)
+            self.db.rollback()
+            return error_response(500, "PET_DELETE_500_1", "반려동물 삭제 중 오류 발생", path)
+
+        # ---------------------------------------------------
+        # 🔥 Response
+        # ---------------------------------------------------
+        return JSONResponse(
+            status_code=200,
+            content=jsonable_encoder(
+                {
+                    "success": True,
+                    "status": 200,
+                    "message": "반려동물이 성공적으로 삭제되었습니다.",
+                    "pet_id": pet_id,
                     "timeStamp": datetime.utcnow().isoformat(),
                     "path": path,
                 }
