@@ -28,3 +28,6 @@ httpx==0.27.0              # 외부 API 호출 (날씨 API 등)
 
 # --- Timezone ---
 pytz==2024.1               # KST 기준 날짜 처리
+
+# -- API ---
+openai

@@ -3,7 +3,7 @@ from sqlalchemy.sql import func
 from app.models.base import Base
 import enum
 
-class PetGender(enum.Enum):
+class PetGender(str, enum.Enum):
     M = "M"
     F = "F"
     Unknown = "Unknown"
@@ -21,7 +21,7 @@ class Pet(Base):
     breed = Column(String(50))
     age = Column(Integer)
     weight = Column(Float)
-    gender = Column(Enum(PetGender), default=PetGender.Unknown)
+    gender = Column(Enum(PetGender), default=PetGender.Unknown, nullable=True)
 
     disease = Column(String(255))
     image_url = Column(String(255))

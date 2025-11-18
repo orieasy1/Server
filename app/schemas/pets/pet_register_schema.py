@@ -10,3 +10,7 @@ class PetRegisterRequest(BaseModel):
     gender: Optional[str] = Field(None, description="M, F, Unknown")
     pet_search_id: str = Field(..., description="초대 코드 (영문+숫자 8자리)")
     image_url: Optional[str] = Field(None, description="이미지 URL (Firebase Storage 등)")
+    disease: Optional[str] = Field(
+        None,
+        description="기저 질환 정보 (예: 심장병, 관절염). 없으면 null"
+    )

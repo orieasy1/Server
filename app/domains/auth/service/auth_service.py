@@ -87,7 +87,7 @@ class AuthService:
                 firebase_uid=firebase_uid,
                 nickname=nickname or f"user_{firebase_uid[:6]}",
                 email=email,
-                picture=picture,
+                profile_img_url=picture,
                 sns=sns
             )
         except Exception as e:

@@ -3,7 +3,7 @@ from sqlalchemy.sql import func
 from app.models.base import Base
 import enum
 
-class MemberRole(enum.Enum):
+class MemberRole(str, enum.Enum):
     OWNER = "OWNER"
     MEMBER = "MEMBER"
 
@@ -14,5 +14,5 @@ class FamilyMember(Base):
     family_id = Column(Integer, ForeignKey("families.family_id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
 
-    role = Column(Enum(MemberRole), default=MemberRole.MEMBER)
+    role = Column(Enum(MemberRole), default=MemberRole.MEMBER, nullable=False)
     joined_at = Column(DateTime, default=func.now())

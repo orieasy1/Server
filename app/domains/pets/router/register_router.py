@@ -1,23 +1,25 @@
-from fastapi import APIRouter, Header, Request, Depends, UploadFile, File
+from fastapi import APIRouter, Header, Request, Depends
 from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.db import get_db
+
+from app.schemas.error_schema import ErrorResponse
 from app.schemas.pets.pet_register_schema import PetRegisterRequest
-from app.domains.pets.service.register_service import PetRegisterService
-from app.schemas.error_schema import ErrorResponse   # 🔥 추가
-from app.domains.pets.service.pet_update_service import PetUpdateService
 from app.schemas.pets.pet_update_schema import PetUpdateRequest, PetUpdateResponse
-from app.domains.pets.service.pet_image_service import PetImageService
 from app.schemas.pets.pet_image_schema import PetImageResponse
 
+from app.domains.pets.service.register_service import PetRegisterService
+from app.domains.pets.service.pet_modify_service import PetModifyService
 
 router = APIRouter(
     prefix="/api/v1/pets",
     tags=["Pets"]
 )
 
-
+# ------------------------
+# 1. 반려동물 등록
+# ------------------------
 @router.post(
     "",
     summary="반려동물 신규 등록",
@@ -37,13 +39,11 @@ def register_pet(
     db: Session = Depends(get_db),
 ):
     service = PetRegisterService(db)
-    return service.register_pet(
-        request=request,
-        authorization=authorization,
-        body=body,
-    )
+    return service.register_pet(request, authorization, body)
 
-
+# ------------------------
+# 2. 반려동물 정보 부분 수정
+# ------------------------
 @router.patch(
     "/{pet_id}",
     summary="반려동물 세부 정보 부분 수정",
@@ -64,18 +64,15 @@ def update_pet(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    service = PetUpdateService(db)
-    return service.patch_pet(
-        request=request,
-        authorization=authorization,
-        pet_id=pet_id,
-        body=body,
-    )
+    service = PetModifyService(db)
+    return service.update_pet_detail(request, authorization, pet_id, body)
 
-
+# ------------------------
+# 3. 반려동물 이미지 URL 업데이트
+# ------------------------
 @router.post(
     "/{pet_id}/image",
-    summary="반려동물 프로필 이미지 업로드/변경",
+    summary="반려동물 이미지 URL 업데이트",
     status_code=200,
     response_model=PetImageResponse,
     responses={
@@ -86,17 +83,11 @@ def update_pet(
         500: {"model": ErrorResponse},
     },
 )
-def upload_pet_image(
+def update_pet_image(
     pet_id: int,
     request: Request,
-    file: UploadFile = File(...),
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    service = PetImageService(db)
-    return service.upload_image(
-        request=request,
-        authorization=authorization,
-        pet_id=pet_id,
-        file=file,
-    )
+    service = PetModifyService(db)
+    return service.update_pet_image(request, authorization, pet_id, body.image_url)

@@ -3,9 +3,13 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.db import get_db
-from app.domains.pets.service.my_pets_service import MyPetsService
 from app.schemas.error_schema import ErrorResponse
 from app.schemas.pets.my_pets_schema import MyPetsResponse
+from app.schemas.pets.pet_update_schema import PetUpdateRequest
+
+from app.domains.pets.service.my_pets_service import MyPetsService
+from app.domains.pets.service.pet_modify_service import PetModifyService
+
 
 router = APIRouter(
     prefix="/api/v1/pets",
@@ -13,6 +17,9 @@ router = APIRouter(
 )
 
 
+# -------------------------------------------------------
+# 1) 내가 속한 모든 family의 반려동물 목록 조회
+# -------------------------------------------------------
 @router.get(
     "/my",
     summary="내가 속한 모든 family의 반려동물 목록 조회",
