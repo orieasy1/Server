@@ -9,6 +9,7 @@ from app.core.firebase import verify_firebase_token
 from app.core.error_handler import error_response
 from app.models.user import User
 from app.models.pet import Pet
+from app.models.notification import Notification, NotificationType
 from app.models.pet_share_request import RequestStatus
 
 # 새로운 Repo 구조
@@ -112,6 +113,19 @@ class PetShareRequestService:
                 500, "PET_SHARE_500_1",
                 "반려동물 공유 요청을 생성하는 중 오류가 발생했습니다.",
                 path
+            )
+        
+        # 7-1) 🔔 공유 요청 알림
+        owner = self.db.get(User, pet.owner_id)
+        if owner:
+            self._create_notification(
+                family_id=pet.family_id,
+                target_user_id=owner.user_id,
+                type=NotificationType.REQUEST,
+                title="반려동물 공유 요청",
+                message=f"{user.nickname}님이 {pet.name} 공유 요청을 보냈습니다.",
+                pet_id=pet.pet_id,
+                user_id=user.user_id
             )
 
         # 8) Owner 정보
@@ -246,6 +260,31 @@ class PetShareRequestService:
                 "반려동물 공유 요청을 처리하는 중 오류가 발생했습니다.",
                 path
             )
+        
+        # 8) 🔔 승인/거절 알림
+        requester = self.db.get(User, req.requester_id)
+
+        if requester:
+            if new_status == RequestStatus.APPROVED:
+                self._create_notification(
+                    family_id=pet.family_id,
+                    target_user_id=requester.user_id,
+                    type=NotificationType.REQUEST,
+                    title="공유 요청 승인됨",
+                    message=f"{pet.name} 공유 요청이 승인되었습니다!",
+                    pet_id=pet.pet_id,
+                    user_id=requester.user_id,
+                )
+            else:
+                self._create_notification(
+                    family_id=pet.family_id,
+                    target_user_id=requester.user_id,
+                    type=NotificationType.REQUEST,
+                    title="공유 요청 거절됨",
+                    message=f"{pet.name} 공유 요청이 거절되었습니다.",
+                    pet_id=pet.pet_id,
+                    user_id=requester.user_id,
+                )
 
         # 응답
         response = {
@@ -275,3 +314,20 @@ class PetShareRequestService:
             }
 
         return JSONResponse(status_code=200, content=jsonable_encoder(response))
+
+    def _create_notification(self, family_id, target_user_id, type, title, message, pet_id, user_id):
+        try:
+            notification = Notification(
+                family_id=family_id,
+                target_user_id=target_user_id,
+                type=type,
+                title=title,
+                message=message,
+                related_pet_id=pet_id,
+                related_user_id=user_id,
+            )
+            self.db.add(notification)
+            self.db.commit()
+        except Exception as e:
+            print("NOTIFICATION_ERROR:", e)
+            self.db.rollback()
