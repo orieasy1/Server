@@ -3,59 +3,67 @@ from typing import Optional
 
 
 class PetShareRequestCreate(BaseModel):
+    """반려동물 공유 요청 생성"""
     pet_search_id: str = Field(..., description="초대코드(반려동물 검색 ID)")
-    message: Optional[None | str] = None
+    message: Optional[str] = Field(None, description="요청 메시지")
 
 
 class PetShareApproveRequest(BaseModel):
+    """반려동물 공유 요청 승인/거절"""
     status: str = Field(..., description="APPROVED 또는 REJECTED")
 
 
 class ShareRequestInfo(BaseModel):
-    id: int
-    pet_id: int
-    requester_id: int
-    status: str
-    message: Optional[str] = None
-    created_at: Optional[str] = None
-    responded_at: Optional[str] = None
+    """공유 요청 정보"""
+    id: int = Field(..., description="요청 ID")
+    pet_id: int = Field(..., description="반려동물 ID")
+    requester_id: int = Field(..., description="요청자 ID")
+    status: str = Field(..., description="요청 상태 (PENDING, APPROVED, REJECTED)")
+    message: Optional[str] = Field(None, description="요청 메시지")
+    created_at: Optional[str] = Field(None, description="생성 시간 (ISO 형식)")
+    responded_at: Optional[str] = Field(None, description="응답 시간 (ISO 형식)")
 
 
 class PetBrief(BaseModel):
-    pet_id: int
-    name: Optional[str] = None
-    breed: Optional[str] = None
-    image_url: Optional[str] = None
+    """반려동물 간략 정보"""
+    pet_id: int = Field(..., description="반려동물 ID")
+    name: Optional[str] = Field(None, description="반려동물 이름")
+    breed: Optional[str] = Field(None, description="품종")
+    image_url: Optional[str] = Field(None, description="이미지 URL")
 
 
 class OwnerBrief(BaseModel):
-    user_id: int
-    nickname: Optional[str] = None
+    """소유자 간략 정보"""
+    user_id: int = Field(..., description="사용자 ID")
+    nickname: Optional[str] = Field(None, description="닉네임")
 
 
 class FamilyMemberInfo(BaseModel):
-    id: int
-    family_id: int
-    user_id: int
-    role: str
-    joined_at: Optional[str] = None
+    """가족 구성원 정보"""
+    id: int = Field(..., description="가족 구성원 ID")
+    family_id: int = Field(..., description="가족 ID")
+    user_id: int = Field(..., description="사용자 ID")
+    role: str = Field(..., description="역할 (OWNER, MEMBER)")
+    joined_at: Optional[str] = Field(None, description="가입 시간 (ISO 형식)")
 
 
 class PetShareRequestResponse(BaseModel):
-    success: bool = True
-    status: int = 201
-    share_request: ShareRequestInfo
-    pet: PetBrief
-    owner: OwnerBrief
-    timeStamp: str
-    path: str
+    """반려동물 공유 요청 생성 응답"""
+    success: bool = Field(True, description="성공 여부")
+    status: int = Field(201, description="HTTP 상태 코드")
+    share_request: ShareRequestInfo = Field(..., description="공유 요청 정보")
+    pet: PetBrief = Field(..., description="반려동물 정보")
+    owner: OwnerBrief = Field(..., description="소유자 정보")
+    timeStamp: str = Field(..., description="응답 시간 (ISO 형식)")
+    path: str = Field(..., description="요청 경로")
 
 
 class PetShareApproveResponse(BaseModel):
-    success: bool = True
-    status: int = 200
-    share_request: ShareRequestInfo
-    member_added: bool
-    family_member: Optional[FamilyMemberInfo] = None
-    timeStamp: str
-    path: str
+    """반려동물 공유 요청 승인/거절 응답"""
+    success: bool = Field(True, description="성공 여부")
+    status: int = Field(200, description="HTTP 상태 코드")
+    share_request: ShareRequestInfo = Field(..., description="공유 요청 정보")
+    member_added: bool = Field(..., description="구성원 추가 여부")
+    family_member: Optional[FamilyMemberInfo] = Field(None, description="추가된 가족 구성원 정보")
+    timeStamp: str = Field(..., description="응답 시간 (ISO 형식)")
+    path: str = Field(..., description="요청 경로")

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, Request, Depends, UploadFile, File, Form
+from fastapi import APIRouter, Header, Request, Depends, UploadFile, File, Form, Query, Path
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -27,19 +27,20 @@ router = APIRouter(
 @router.get(
     "/recommendations",
     summary="추천 산책 정보 조회",
+    description="반려동물의 특성에 맞는 추천 산책 정보를 조회합니다.",
     status_code=200,
     response_model=RecommendationResponse,
     responses={
-        401: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        401: {"model": ErrorResponse, "description": "인증 실패"},
+        403: {"model": ErrorResponse, "description": "권한 없음"},
+        404: {"model": ErrorResponse, "description": "반려동물을 찾을 수 없음"},
+        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
     },
 )
 def get_recommendation(
     request: Request,
-    pet_id: int,
-    authorization: Optional[str] = Header(None),
+    pet_id: int = Query(..., description="반려동물 ID"),
+    authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
     db: Session = Depends(get_db),
 ):
     """
@@ -59,19 +60,20 @@ def get_recommendation(
 @router.get(
     "/today",
     summary="오늘 산책 현황 조회",
+    description="오늘 날짜 기준으로 반려동물의 산책 현황을 조회합니다.",
     status_code=200,
     response_model=TodayWalkResponse,
     responses={
-        401: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        401: {"model": ErrorResponse, "description": "인증 실패"},
+        403: {"model": ErrorResponse, "description": "권한 없음"},
+        404: {"model": ErrorResponse, "description": "반려동물을 찾을 수 없음"},
+        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
     },
 )
 def get_today_walks(
     request: Request,
-    pet_id: int,
-    authorization: Optional[str] = Header(None),
+    pet_id: int = Query(..., description="반려동물 ID"),
+    authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
     db: Session = Depends(get_db),
 ):
     """
@@ -97,21 +99,22 @@ def get_today_walks(
 @router.post(
     "/goals",
     summary="목표 산책량 설정",
+    description="반려동물의 목표 산책량을 설정합니다. 기존 목표가 있으면 업데이트됩니다.",
     status_code=200,
     response_model=WalkGoalResponse,
     responses={
-        400: {"model": ErrorResponse},
-        401: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": ErrorResponse, "description": "잘못된 요청 (유효하지 않은 값 등)"},
+        401: {"model": ErrorResponse, "description": "인증 실패"},
+        403: {"model": ErrorResponse, "description": "권한 없음"},
+        404: {"model": ErrorResponse, "description": "반려동물을 찾을 수 없음"},
+        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
     },
 )
 def set_walk_goal(
     request: Request,
-    pet_id: int,
-    body: WalkGoalRequest,
-    authorization: Optional[str] = Header(None),
+    pet_id: int = Query(..., description="반려동물 ID"),
+    body: WalkGoalRequest = ...,
+    authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
     db: Session = Depends(get_db),
 ):
     """
@@ -135,21 +138,22 @@ def set_walk_goal(
 @router.patch(
     "/goals/{goal_id}",
     summary="목표 산책량 수정",
+    description="기존 목표 산책량을 부분적으로 수정합니다.",
     status_code=200,
     response_model=WalkGoalResponse,
     responses={
-        400: {"model": ErrorResponse},
-        401: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": ErrorResponse, "description": "잘못된 요청"},
+        401: {"model": ErrorResponse, "description": "인증 실패"},
+        403: {"model": ErrorResponse, "description": "권한 없음 (소유자만 수정 가능)"},
+        404: {"model": ErrorResponse, "description": "목표를 찾을 수 없음"},
+        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
     },
 )
 def patch_walk_goal(
     request: Request,
-    goal_id: int,
-    body: WalkGoalPatchRequest,
-    authorization: Optional[str] = Header(None),
+    goal_id: int = Path(..., description="목표 산책량 ID"),
+    body: WalkGoalPatchRequest = ...,
+    authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
     db: Session = Depends(get_db),
 ):
     """
@@ -172,21 +176,22 @@ def patch_walk_goal(
 @router.post(
     "/sessions/start",
     summary="산책 시작",
+    description="새로운 산책 세션을 시작합니다. 진행 중인 산책이 있으면 시작할 수 없습니다.",
     status_code=201,
     response_model=WalkStartResponse,
     responses={
-        400: {"model": ErrorResponse},
-        401: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        409: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": ErrorResponse, "description": "잘못된 요청 (GPS 좌표 형식 오류 등)"},
+        401: {"model": ErrorResponse, "description": "인증 실패"},
+        403: {"model": ErrorResponse, "description": "권한 없음"},
+        404: {"model": ErrorResponse, "description": "반려동물을 찾을 수 없음"},
+        409: {"model": ErrorResponse, "description": "이미 진행 중인 산책이 있음"},
+        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
     },
 )
 def start_walk(
     request: Request,
-    body: WalkStartRequest,
-    authorization: Optional[str] = Header(None),
+    body: WalkStartRequest = ...,
+    authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
     db: Session = Depends(get_db),
 ):
     """
@@ -209,22 +214,23 @@ def start_walk(
 @router.post(
     "/sessions/{walk_id}/track",
     summary="산책 위치 기록",
+    description="산책 중 실시간 위치 정보를 기록합니다. 종료된 산책에는 기록할 수 없습니다.",
     status_code=201,
     response_model=WalkTrackResponse,
     responses={
-        400: {"model": ErrorResponse},
-        401: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        409: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": ErrorResponse, "description": "잘못된 요청 (위도/경도 범위 초과 등)"},
+        401: {"model": ErrorResponse, "description": "인증 실패"},
+        403: {"model": ErrorResponse, "description": "권한 없음"},
+        404: {"model": ErrorResponse, "description": "산책을 찾을 수 없음"},
+        409: {"model": ErrorResponse, "description": "이미 종료된 산책"},
+        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
     },
 )
 def track_walk(
     request: Request,
-    walk_id: int,
-    body: WalkTrackRequest,
-    authorization: Optional[str] = Header(None),
+    walk_id: int = Path(..., description="산책 세션 ID"),
+    body: WalkTrackRequest = ...,
+    authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
     db: Session = Depends(get_db),
 ):
     """
@@ -248,22 +254,23 @@ def track_walk(
 @router.post(
     "/sessions/{walk_id}/end",
     summary="산책 종료",
+    description="산책 세션을 종료하고 최종 통계를 기록합니다. 활동 통계가 자동으로 업데이트됩니다.",
     status_code=200,
     response_model=WalkEndResponse,
     responses={
-        400: {"model": ErrorResponse},
-        401: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        409: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": ErrorResponse, "description": "잘못된 요청"},
+        401: {"model": ErrorResponse, "description": "인증 실패"},
+        403: {"model": ErrorResponse, "description": "권한 없음"},
+        404: {"model": ErrorResponse, "description": "산책을 찾을 수 없음"},
+        409: {"model": ErrorResponse, "description": "이미 종료된 산책"},
+        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
     },
 )
 def end_walk(
     request: Request,
-    walk_id: int,
-    body: WalkEndRequest,
-    authorization: Optional[str] = Header(None),
+    walk_id: int = Path(..., description="산책 세션 ID"),
+    body: WalkEndRequest = ...,
+    authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
     db: Session = Depends(get_db),
 ):
     """
@@ -287,21 +294,22 @@ def end_walk(
 @router.get(
     "/weather",
     summary="날씨 정보 조회",
+    description="현재 위치 기반 날씨 정보를 조회합니다. 인증은 선택사항이며, 외부 API를 통해 조회됩니다.",
     status_code=200,
     response_model=WeatherResponse,
     responses={
-        400: {"model": ErrorResponse},
-        401: {"model": ErrorResponse},
-        502: {"model": ErrorResponse},
-        503: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": ErrorResponse, "description": "잘못된 요청 (위도/경도 누락 등)"},
+        401: {"model": ErrorResponse, "description": "인증 실패 (선택적)"},
+        502: {"model": ErrorResponse, "description": "외부 API 게이트웨이 오류"},
+        503: {"model": ErrorResponse, "description": "외부 API 서비스 불가"},
+        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
     },
 )
 def get_weather(
     request: Request,
-    lat: Optional[float] = None,
-    lng: Optional[float] = None,
-    authorization: Optional[str] = Header(None),
+    lat: Optional[float] = Query(None, description="위도 (-90 ~ 90)"),
+    lng: Optional[float] = Query(None, description="경도 (-180 ~ 180)"),
+    authorization: Optional[str] = Header(None, description="Firebase ID 토큰 (선택적)"),
 ):
     """
     현재 위치 기반 날씨 정보를 조회합니다.
@@ -325,24 +333,25 @@ def get_weather(
 @router.post(
     "/sessions/{walk_id}/photo",
     summary="산책 사진 업로드",
+    description="산책 종료 후 인증 사진을 업로드합니다. 종료된 산책에만 업로드 가능합니다.",
     status_code=201,
     response_model=PhotoUploadResponse,
     responses={
-        400: {"model": ErrorResponse},
-        401: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        409: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
+        400: {"model": ErrorResponse, "description": "잘못된 요청 (파일 형식/크기 오류 등)"},
+        401: {"model": ErrorResponse, "description": "인증 실패"},
+        403: {"model": ErrorResponse, "description": "권한 없음"},
+        404: {"model": ErrorResponse, "description": "산책을 찾을 수 없음"},
+        409: {"model": ErrorResponse, "description": "진행 중인 산책에는 업로드 불가"},
+        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
     },
 )
 def upload_walk_photo(
     request: Request,
-    walk_id: int,
-    file: UploadFile = File(...),
-    caption: Optional[str] = Form(None),
-    photo_timestamp: Optional[str] = Form(None),
-    authorization: Optional[str] = Header(None),
+    walk_id: int = Path(..., description="산책 세션 ID"),
+    file: UploadFile = File(..., description="이미지 파일 (JPG, PNG, 최대 10MB)"),
+    caption: Optional[str] = Form(None, description="사진 설명"),
+    photo_timestamp: Optional[str] = Form(None, description="사진 촬영 시간 (ISO 형식)"),
+    authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
     db: Session = Depends(get_db),
 ):
     """

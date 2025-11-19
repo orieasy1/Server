@@ -61,9 +61,25 @@ def custom_openapi():
         return app.openapi_schema
 
     openapi_schema = get_openapi(
-        title="TakeAPaw API",
+        title="Take a Paw API 🐾",
         version="1.0.0",
-        description="반려동물 관리 서비스 TakeAPaw API 문서",
+        description="""
+        ## Take a Paw API
+        
+        반려동물 산책 관리 애플리케이션을 위한 백엔드 API입니다.
+        
+        ### 주요 기능
+        - 🔐 Firebase 기반 사용자 인증
+        - 🐕 반려동물 등록 및 관리
+        - 🚶 산책 기록 및 추적
+        - 📊 활동 통계 및 시각화
+        - 📸 산책 사진 관리
+        - 👨‍👩‍👧‍👦 가족 구성원 공유
+        
+        ### 인증
+        대부분의 API는 Firebase ID 토큰을 Authorization 헤더에 포함하여 요청해야 합니다.
+        일부 API(예: 날씨 조회)는 선택적 인증을 지원합니다.
+        """,
         routes=app.routes,
     )
 
@@ -72,12 +88,13 @@ def custom_openapi():
         "BearerAuth": {
             "type": "http",
             "scheme": "bearer",
-            "bearerFormat": "JWT"
+            "bearerFormat": "JWT",
+            "description": "Firebase ID 토큰을 Bearer 형식으로 전달하세요. 예: Bearer <token>"
         }
     }
 
-    # 🔥 모든 API에 BearerAuth 기본 적용
-    openapi_schema["security"] = [{"BearerAuth": []}]
+    # 🔥 모든 경로에 BearerAuth를 선택적으로 적용 (각 엔드포인트에서 개별적으로 설정 가능)
+    # 전역 보안은 설정하지 않고, 각 엔드포인트에서 필요시 security 파라미터로 설정
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
