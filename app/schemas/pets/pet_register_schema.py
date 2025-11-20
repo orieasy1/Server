@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional
+from datetime import datetime
 
 
 class PetRegisterRequest(BaseModel):
@@ -15,3 +16,61 @@ class PetRegisterRequest(BaseModel):
         None,
         description="기저 질환 정보 (예: 심장병, 관절염). 없으면 null"
     )
+
+
+class PetInfo(BaseModel):
+    pet_id: int
+    family_id: int
+    owner_id: int
+    pet_search_id: str
+    name: str
+    breed: Optional[str]
+    age: Optional[int]
+    weight: Optional[float]
+    gender: Optional[str]
+    disease: Optional[str]
+    image_url: Optional[str]
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+
+class FamilyInfo(BaseModel):
+    id: int
+    family_name: str
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+
+class OwnerMemberInfo(BaseModel):
+    id: int
+    family_id: int
+    user_id: int
+    role: str
+    joined_at: datetime
+
+
+class RecommendationInfo(BaseModel):
+    rec_id: int
+    pet_id: int
+    min_walks: int
+    min_minutes: int
+    min_distance_km: float
+    recommended_walks: int
+    recommended_minutes: int
+    recommended_distance_km: float
+    max_walks: int
+    max_minutes: int
+    max_distance_km: float
+    generated_by: str
+    updated_at: datetime
+
+
+class PetRegisterResponse(BaseModel):
+    success: bool
+    status: int
+    pet: PetInfo
+    family: FamilyInfo
+    owner_member: OwnerMemberInfo
+    recommendation: RecommendationInfo
+    timeStamp: datetime
+    path: str

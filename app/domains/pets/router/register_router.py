@@ -5,7 +5,7 @@ from typing import Optional
 from app.db import get_db
 
 from app.schemas.error_schema import ErrorResponse
-from app.schemas.pets.pet_register_schema import PetRegisterRequest
+from app.schemas.pets.pet_register_schema import PetRegisterRequest, PetRegisterResponse
 from app.schemas.pets.pet_update_schema import PetUpdateRequest, PetUpdateResponse
 from app.schemas.pets.pet_image_schema import PetImageResponse
 
@@ -23,8 +23,12 @@ router = APIRouter(
 @router.post(
     "",
     summary="반려동물 신규 등록",
-    description="새로운 반려동물을 등록합니다. 초대코드(pet_search_id)는 자동으로 생성되거나 제공된 값을 사용합니다.",
+    description=(
+        "새로운 반려동물을 등록합니다. "
+        "초대코드(pet_search_id)는 자동으로 생성되거나 제공된 값을 사용합니다."
+    ),
     status_code=201,
+    response_model=PetRegisterResponse,
     responses={
         400: {"model": ErrorResponse, "description": "잘못된 요청 (필수 필드 누락, 형식 오류 등)"},
         401: {"model": ErrorResponse, "description": "인증 실패"},
@@ -36,14 +40,16 @@ router = APIRouter(
 def register_pet(
     request: Request,
     body: PetRegisterRequest,
-    authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
+    authorization: Optional[str] = Header(
+        None, description="Firebase ID 토큰 (형식: Bearer <token>)"
+    ),
     db: Session = Depends(get_db),
 ):
     """
     반려동물을 등록합니다.
     
     - 반려동물 기본 정보 (이름, 품종, 나이, 몸무게, 성별 등)를 입력받아 등록
-    - 초대코드(pet_search_id)는 8자리 영문+숫자로 자동 생성
+    - 초대코드(pet_search_id)는 8자리 영문+숫자로 자동 생성 또는 제공된 값 사용
     - 등록한 사용자가 자동으로 owner로 설정됨
     """
     service = PetRegisterService(db)

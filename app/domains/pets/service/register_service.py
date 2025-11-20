@@ -18,8 +18,7 @@ from app.models.user import User
 from app.domains.pets.repository.pet_repository import PetRepository
 from app.domains.pets.repository.family_repository import FamilyRepository
 
-from app.schemas.pets.pet_register_schema import PetRegisterRequest
-
+from app.schemas.pets.pet_register_schema import PetRegisterRequest, PetRegisterResponse
 
 class PetRegisterService:
     def __init__(self, db: Session):
@@ -228,39 +227,40 @@ class PetRegisterService:
                 "gender": pet.gender.value if pet.gender else None,
                 "disease": pet.disease,
                 "image_url": pet.image_url,
-                "created_at": pet.created_at.isoformat(),
+                "created_at": pet.created_at.isoformat() if pet.created_at else None,
                 "updated_at": pet.updated_at.isoformat() if pet.updated_at else None,
+
             },
             "family": {
                 "id": family.family_id,
                 "family_name": family.family_name,
-                "created_at": family.created_at.isoformat(),
-                "updated_at": family.updated_at.isoformat() if family.updated_at else None,
+                "created_at": family.created_at,
+                "updated_at": family.updated_at,
             },
             "owner_member": {
                 "id": owner_member.member_id,
                 "family_id": owner_member.family_id,
                 "user_id": owner_member.user_id,
                 "role": owner_member.role.value,
-                "joined_at": owner_member.joined_at.isoformat(),
+                "joined_at": owner_member.joined_at,
             },
             "recommendation": {
                 "rec_id": recommendation.rec_id,
                 "pet_id": recommendation.pet_id,
                 "min_walks": recommendation.min_walks,
                 "min_minutes": recommendation.min_minutes,
-                "min_distance_km": float(recommendation.min_distance_km),
+                "min_distance_km": recommendation.min_distance_km,
                 "recommended_walks": recommendation.recommended_walks,
                 "recommended_minutes": recommendation.recommended_minutes,
-                "recommended_distance_km": float(recommendation.recommended_distance_km),
+                "recommended_distance_km": recommendation.recommended_distance_km,
                 "max_walks": recommendation.max_walks,
                 "max_minutes": recommendation.max_minutes,
-                "max_distance_km": float(recommendation.max_distance_km),
+                "max_distance_km": recommendation.max_distance_km,
                 "generated_by": recommendation.generated_by,
-                "updated_at": recommendation.updated_at.isoformat(),
+                "updated_at": recommendation.updated_at,
             },
-            "timeStamp": datetime.utcnow().isoformat(),
+            "timeStamp": datetime.utcnow(),
             "path": path,
         }
 
-        return JSONResponse(status_code=201, content=jsonable_encoder(resp))
+        return PetRegisterResponse(**resp)
