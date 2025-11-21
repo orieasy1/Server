@@ -11,11 +11,54 @@ from app.schemas.pets.pet_image_schema import PetImageResponse
 
 from app.domains.pets.service.register_service import PetRegisterService
 from app.domains.pets.service.pet_modify_service import PetModifyService
+from app.domains.pets.repository.pet_repository import PetRepository
+from app.core.error_handler import error_response
 
 router = APIRouter(
     prefix="/api/v1/pets",
     tags=["Pets"]
 )
+
+# ------------------------
+# 0. 초대코드 중복 확인
+# ------------------------
+@router.get(
+    "/check/{pet_search_id}",
+    summary="아이디 중복 확인",
+    description="반려동물 아이디가 이미 사용 중인지 확인합니다.",
+    status_code=200,
+    responses={
+        200: {"description": "사용 가능한 아이디"},
+        400: {"model": ErrorResponse, "description": "잘못된 형식"},
+        409: {"model": ErrorResponse, "description": "이미 사용 중인 아이디"},
+    },
+)
+def check_pet_search_id(
+    pet_search_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    아이디 중복 확인
+    
+    - pet_search_id: 확인할 아이디 (8자리 영문+숫자)
+    - 사용 가능하면 200, 중복이면 409 반환
+    """
+    import re
+    
+    # 형식 검증
+    if not re.fullmatch(r"[A-Za-z0-9]{8}", pet_search_id):
+        return error_response(400, "PET_400_5", "아이디는 영문+숫자 8자리여야 합니다.", f"/api/v1/pets/check/{pet_search_id}")
+    
+    pet_repo = PetRepository(db)
+    if pet_repo.exists_pet_search_id(pet_search_id):
+        return error_response(409, "PET_409_1", "이미 사용 중인 아이디입니다.", f"/api/v1/pets/check/{pet_search_id}")
+    
+    return {
+        "success": True,
+        "status": 200,
+        "message": "사용 가능한 아이디입니다.",
+        "pet_search_id": pet_search_id
+    }
 
 # ------------------------
 # 1. 반려동물 등록

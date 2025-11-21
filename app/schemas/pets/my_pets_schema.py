@@ -9,6 +9,7 @@ class MyPetItem(BaseModel):
     family_name: Optional[str] = Field(None, description="가족 이름")
     owner_id: int = Field(..., description="소유자 ID")
     is_owner: bool = Field(..., description="소유자 여부")
+    pet_search_id: str = Field(..., description="반려동물 검색 ID (초대 코드)")
     name: str = Field(..., description="반려동물 이름")
     breed: Optional[str] = Field(None, description="품종")
     age: Optional[int] = Field(None, description="나이")
