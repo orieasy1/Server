@@ -34,6 +34,10 @@ class ActivityStatsService:
             if date_str:
                 base_date = datetime.strptime(date_str, "%Y-%m-%d")
             else:
+                # date가 없을 때 기본값 설정
+                # period=day: 오늘 날짜 사용
+                # period=week: 오늘 날짜 기준으로 이번 주 시작일 계산 (아래 로직에서 처리)
+                # period=month: 오늘 날짜 기준으로 이번 달 1일 계산 (아래 로직에서 처리)
                 base_date = datetime.now(kst).date()
                 base_date = datetime(base_date.year, base_date.month, base_date.day)
             if isinstance(base_date, datetime):

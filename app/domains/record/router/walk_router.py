@@ -144,12 +144,21 @@ def get_activity_stats(
     authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
     db: Session = Depends(get_db),
 ):
+    # period 변환: daily -> day, weekly -> week, monthly -> month, all -> all
+    period_map = {
+        "daily": "day",
+        "weekly": "week",
+        "monthly": "month",
+        "all": "all"
+    }
+    period_normalized = period_map.get(period.lower(), period)
+    
     service = ActivityStatsService(db)
     return service.get_stats(
         request=request,
         authorization=authorization,
         pet_id=pet_id,
-        period=period,
+        period=period_normalized,
         date=date,
         start_date=start_date,
         end_date=end_date,
