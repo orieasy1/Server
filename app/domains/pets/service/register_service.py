@@ -17,6 +17,7 @@ from app.models.user import User
 # 통합된 repository 구조 기준
 from app.domains.pets.repository.pet_repository import PetRepository
 from app.domains.pets.repository.family_repository import FamilyRepository
+from app.domains.auth.repository.auth_repository import AuthRepository
 
 from app.schemas.pets.pet_register_schema import PetRegisterRequest, PetRegisterResponse
 
@@ -123,6 +124,20 @@ class PetRegisterService:
             return error_response(401, "PET_401_2", "유효하지 않거나 만료된 Firebase 토큰입니다.", path)
 
         firebase_uid = decoded.get("uid")
+        email = decoded.get("email")
+        nickname = decoded.get("name") or decoded.get("displayName")
+        picture = decoded.get("picture")
+        provider = decoded.get("firebase", {}).get("sign_in_provider")
+
+        # ⭐ provider → sns(enum) 변환
+        provider_map = {
+            "google.com": "google",
+            "apple.com": "apple",
+            "oidc.kakao": "kakao",
+            "custom": "kakao",
+            "password": "email"
+        }
+        sns = provider_map.get(provider, "email")
 
         # User 조회
         user = (
@@ -130,8 +145,24 @@ class PetRegisterService:
             .filter(User.firebase_uid == firebase_uid)
             .first()
         )
+        
+        # 🔥 사용자가 없으면 자동으로 생성
         if not user:
-            return error_response(404, "PET_404_1", "해당 사용자를 찾을 수 없습니다.", path)
+            try:
+                auth_repo = AuthRepository(self.db)
+                user = auth_repo.create_user(
+                    firebase_uid=firebase_uid,
+                    nickname=nickname or f"user_{firebase_uid[:6]}",
+                    email=email,
+                    profile_img_url=picture,
+                    sns=sns
+                )
+                self.db.commit()
+                print(f"✅ 신규 사용자 자동 생성: {user.nickname} (uid: {firebase_uid})")
+            except Exception as e:
+                self.db.rollback()
+                print(f"❌ 사용자 생성 실패: {e}")
+                return error_response(500, "PET_500_3", "사용자 생성 중 오류가 발생했습니다.", path)
 
         # Body 검증
         if not body.name:

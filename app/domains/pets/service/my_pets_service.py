@@ -79,6 +79,7 @@ class MyPetsService:
                 "family_name": family.family_name if family else None,
                 "owner_id": pet.owner_id,
                 "is_owner": (pet.owner_id == user.user_id),
+                "pet_search_id": pet.pet_search_id,
                 "name": pet.name,
                 "breed": pet.breed,
                 "age": pet.age,
