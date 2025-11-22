@@ -10,5 +10,6 @@ from .walk_tracking_point import WalkTrackingPoint
 from .photo import Photo
 from .activity_stat import ActivityStat
 from .notification import Notification
+from .notification_reads import NotificationRead 
 from .pet_walk_recommendation import PetWalkRecommendation
 from .pet_walk_goal import PetWalkGoal

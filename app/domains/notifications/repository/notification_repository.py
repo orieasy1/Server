@@ -28,38 +28,36 @@ class NotificationRepository:
             )
         )
 
-        # 사용자가 속한 family만 조회
+        # 사용자가 속한 family의 알림만 조회
         query = query.join(
             FamilyMember,
             FamilyMember.family_id == Notification.family_id
         ).filter(FamilyMember.user_id == user_id)
 
-        # pet 필터
+        # pet 필터 적용
         if pet_id is not None:
             query = query.filter(Notification.related_pet_id == pet_id)
 
-        # type 필터
+        # type 필터 적용
         if notif_type is not None:
             try:
-                notif_type_enum = NotificationType[notif_type]
-                query = query.filter(Notification.type == notif_type_enum)
+                t_enum = NotificationType[notif_type]
+                query = query.filter(Notification.type == t_enum)
             except KeyError:
                 return None, "INVALID_TYPE"
 
-        # ⭐ 변경된 정렬: created_at ASC (카톡 스타일)
+        # 카톡처럼 오래된 → 최신순 ASC 정렬
         query = query.order_by(Notification.created_at.asc())
 
-        # total count
         total_count = query.count()
 
-        # paging
         items = query.offset(page * size).limit(size).all()
 
         return items, total_count
 
-    # ------------------------------
-    # read/unread 계산 관련 추가 메서드들
-    # ------------------------------
+    # ------------------------------------------------------
+    # 📌 가족 구성원 수 (sender 포함)
+    # ------------------------------------------------------
     def get_family_member_count(self, family_id: int) -> int:
         return (
             self.db.query(func.count(FamilyMember.user_id))
@@ -67,13 +65,28 @@ class NotificationRepository:
             .scalar()
         )
 
+    # ------------------------------------------------------
+    # 📌 읽은 사람 수 (sender 제외)
+    # ------------------------------------------------------
     def get_read_count(self, notification_id: int) -> int:
-        return (
-            self.db.query(func.count(NotificationRead.user_id))
+
+        notif = self.db.get(Notification, notification_id)
+        sender_id = notif.related_user_id if notif else None
+
+        query = (
+            self.db.query(NotificationRead)
             .filter(NotificationRead.notification_id == notification_id)
-            .scalar()
         )
 
+        # sender 제외
+        if sender_id:
+            query = query.filter(NotificationRead.user_id != sender_id)
+
+        return query.count()
+
+    # ------------------------------------------------------
+    # 📌 읽음 처리
+    # ------------------------------------------------------
     def mark_as_read(self, notification_id: int, user_id: int):
         existing = (
             self.db.query(NotificationRead)
