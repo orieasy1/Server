@@ -8,6 +8,7 @@ from app.schemas.pets.pet_share_request_schema import (
     PetShareRequestResponse,
     PetShareApproveRequest,
     PetShareApproveResponse,
+    MyShareRequestListResponse
 )
 from app.domains.pets.service.share_request_service import PetShareRequestService
 
@@ -90,4 +91,35 @@ async def approve_pet_share_request(
         authorization=authorization,
         request_id=request_id,
         body=body,
+    )
+
+    # 승인요청 조회 리스트 생성
+
+@router.get(
+    "/share/requests/me",
+    summary="내가 보낸 공유 요청 리스트 조회",
+    description="로그인한 사용자가 보낸 반려동물 공유 요청 목록을 조회합니다.",
+    response_model=MyShareRequestListResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    }
+)
+def get_my_share_requests(
+    request: Request,
+    status: Optional[str] = None,
+    page: int = 0,
+    size: int = 20,
+    authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
+    db: Session = Depends(get_db),
+):
+    service = PetShareRequestService(db)
+    return service.get_my_requests(
+        request=request,
+        authorization=authorization,
+        status=status,
+        page=page,
+        size=size,
     )

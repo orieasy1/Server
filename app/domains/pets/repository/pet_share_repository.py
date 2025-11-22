@@ -66,6 +66,34 @@ class PetShareRepository:
         req.status = status
         self.db.flush()
         return req
+    
+
+    def get_requests_by_user(
+        self,
+        requester_id: int,
+        status: Optional[RequestStatus],
+        page: int,
+        size: int
+    ):
+        query = (
+            self.db.query(PetShareRequest)
+            .filter(PetShareRequest.requester_id == requester_id)
+        )
+
+        if status:
+            query = query.filter(PetShareRequest.status == status)
+
+        total = query.count()
+
+        items = (
+            query.order_by(PetShareRequest.created_at.desc())
+            .offset(page * size)
+            .limit(size)
+            .all()
+        )
+
+        return items, total
+
 
     # ---------------------------------------------------------
     # ⭐ 추가: 특정 사용자가 보낸 요청 목록

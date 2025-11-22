@@ -257,3 +257,75 @@ class PetShareRequestService:
         except Exception as e:
             print("NOTIFICATION_ERROR:", e)
             self.db.rollback()
+
+    def get_my_requests(
+        self,
+        request: Request,
+        authorization: Optional[str],
+        status: Optional[str],
+        page: int,
+        size: int,
+    ):
+        path = request.url.path
+
+        # 1) Auth
+        if not authorization or not authorization.startswith("Bearer "):
+            return error_response(401, "REQ_LIST_401", "Authorization 필요", path)
+
+        token = authorization.split(" ")[1]
+        decoded = verify_firebase_token(token)
+        if decoded is None:
+            return error_response(401, "REQ_LIST_401_2", "유효하지 않은 토큰입니다.", path)
+
+        firebase_uid = decoded["uid"]
+
+        # 2) User 조회
+        user = (
+            self.db.query(User)
+            .filter(User.firebase_uid == firebase_uid)
+            .first()
+        )
+        if not user:
+            return error_response(404, "REQ_LIST_404_1", "사용자를 찾을 수 없습니다.", path)
+
+        # 3) Status 파싱
+        parsed_status = None
+        if status:
+            try:
+                parsed_status = RequestStatus(status.upper())
+            except Exception:
+                return error_response(400, "REQ_LIST_400", "status 값이 잘못되었습니다.", path)
+
+        # 4) Repository 조회
+        items, total = self.share_repo.get_requests_by_user(
+            requester_id=user.user_id,
+            status=parsed_status,
+            page=page,
+            size=size,
+        )
+
+        # 5) 응답 조립
+        results = []
+        for req in items:
+            pet = self.db.get(Pet, req.pet_id)
+
+            results.append({
+                "request_id": req.request_id,
+                "pet_id": pet.pet_id,
+                "pet_name": pet.name,
+                "pet_image_url": pet.image_url,
+                "status": req.status.value,
+                "created_at": req.created_at.isoformat() if req.created_at else None,
+                "responded_at": req.responded_at.isoformat() if req.responded_at else None,
+            })
+
+        return {
+            "success": True,
+            "status": 200,
+            "requests": results,
+            "page": page,
+            "size": size,
+            "total_count": total,
+            "timeStamp": datetime.utcnow().isoformat(),
+            "path": path,
+        }

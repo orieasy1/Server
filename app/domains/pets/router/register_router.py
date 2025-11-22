@@ -152,6 +152,7 @@ def update_pet(
 )
 def update_pet_image(
     pet_id: int,
+    body: PetImageUpdateRequest,
     request: Request,
     authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
     db: Session = Depends(get_db),

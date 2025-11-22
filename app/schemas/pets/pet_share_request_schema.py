@@ -60,3 +60,33 @@ class PetShareApproveResponse(BaseModel):
     family_member: Optional[FamilyMemberInfo] = Field(None, description="추가된 가족 구성원 정보")
     timeStamp: str = Field(..., description="응답 시간 (ISO 형식)")
     path: str = Field(..., description="요청 경로")
+
+
+class MyShareRequestItem(BaseModel):
+    """내가 보낸 공유 요청 단일 항목"""
+    request_id: int = Field(..., description="요청 ID")
+    pet_id: int = Field(..., description="반려동물 ID")
+    pet_name: Optional[str] = Field(None, description="반려동물 이름")
+    pet_image_url: Optional[str] = Field(None, description="반려동물 사진 URL")
+
+    status: str = Field(..., description="요청 상태 (PENDING, APPROVED, REJECTED)")
+    created_at: Optional[str] = Field(None, description="요청 생성 날짜 (ISO 형식)")
+    responded_at: Optional[str] = Field(None, description="승인/거절 날짜 (ISO 형식)")
+
+    class Config:
+        from_attributes = True
+
+
+class MyShareRequestListResponse(BaseModel):
+    """내가 보낸 공유 요청 리스트 조회 응답"""
+    success: bool = Field(True, description="성공 여부")
+    status: int = Field(200, description="HTTP 상태 코드")
+
+    requests: list[MyShareRequestItem] = Field(..., description="내가 보낸 요청 목록")
+
+    page: int = Field(..., description="현재 페이지 번호")
+    size: int = Field(..., description="페이지당 항목 수")
+    total_count: int = Field(..., description="전체 요청 개수")
+
+    timeStamp: str = Field(..., description="응답 시간")
+    path: str = Field(..., description="요청 경로")
