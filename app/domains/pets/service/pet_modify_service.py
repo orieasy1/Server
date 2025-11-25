@@ -21,6 +21,8 @@ from app.models.pet_walk_goal import PetWalkGoal
 from app.models.pet_walk_recommendation import PetWalkRecommendation
 from app.models.pet_share_request import PetShareRequest
 from app.models.notification import Notification
+from app.models.walk_tracking_point import WalkTrackingPoint
+from app.models.activity_stat import ActivityStat
 
 from app.domains.pets.repository.pet_repository import PetRepository
 from app.schemas.pets.pet_update_schema import PetUpdateRequest
@@ -340,32 +342,67 @@ class PetModifyService:
             return error_response(403, "PET_DELETE_403_1", "OWNER만 반려동물을 삭제할 수 있습니다.", path)
 
         # ---------------------------------------------------
-        # 🔥 연관 테이블 전체 삭제
+        # 🔥 연관 데이터 전체 삭제 (FK 순서 완벽 보장)
         # ---------------------------------------------------
         try:
-            # 1. Walk → Photo 삭제
-            walks = self.db.query(Walk).filter(Walk.pet_id == pet_id).all()
-            for walk in walks:
-                self.db.query(Photo).filter(Photo.walk_id == walk.walk_id).delete()
-            self.db.query(Walk).filter(Walk.pet_id == pet_id).delete()
+            # 1️⃣ WalkTrackingPoint 삭제
+            walk_ids = self.db.query(Walk.walk_id).filter(Walk.pet_id == pet_id).all()
+            walk_ids = [w[0] for w in walk_ids]
 
-            # 2. 산책 목표 삭제
-            self.db.query(PetWalkGoal).filter(PetWalkGoal.pet_id == pet_id).delete()
+            if walk_ids:
+                self.db.query(WalkTrackingPoint).filter(
+                    WalkTrackingPoint.walk_id.in_(walk_ids)
+                ).delete(synchronize_session=False)
 
-            # 3. 산책 추천 삭제
-            self.db.query(PetWalkRecommendation)\
-                .filter(PetWalkRecommendation.pet_id == pet_id)\
-                .delete()
+            # 2️⃣ Photo 삭제
+            if walk_ids:
+                self.db.query(Photo).filter(
+                    Photo.walk_id.in_(walk_ids)
+                ).delete(synchronize_session=False)
 
-            # 4. 공유 요청 삭제
-            self.db.query(PetShareRequest).filter(PetShareRequest.pet_id == pet_id).delete()
+            # 3️⃣ Walk 삭제
+            self.db.query(Walk).filter(Walk.pet_id == pet_id).delete(synchronize_session=False)
 
-            # 5. 알림 삭제
-            self.db.query(Notification).filter(Notification.related_pet_id == pet_id).delete()
+            # 4️⃣ ActivityStat 삭제
+            self.db.query(ActivityStat).filter(
+                ActivityStat.pet_id == pet_id
+            ).delete(synchronize_session=False)
 
-            # 6. 실제 Pet 삭제
+            # 5️⃣ PetWalkGoal 삭제
+            self.db.query(PetWalkGoal).filter(
+                PetWalkGoal.pet_id == pet_id
+            ).delete(synchronize_session=False)
+
+            # 6️⃣ PetWalkRecommendation 삭제
+            self.db.query(PetWalkRecommendation).filter(
+                PetWalkRecommendation.pet_id == pet_id
+            ).delete(synchronize_session=False)
+
+            # 7️⃣ PetShareRequest 삭제  
+            #     (⚠️ 먼저 해당 요청을 참조하는 Notifications 제거 필요)
+            share_ids = self.db.query(PetShareRequest.request_id).filter(
+                PetShareRequest.pet_id == pet_id
+            ).all()
+            share_ids = [sid[0] for sid in share_ids]
+
+            if share_ids:
+                self.db.query(Notification).filter(
+                    Notification.related_request_id.in_(share_ids)
+                ).delete(synchronize_session=False)
+
+            self.db.query(PetShareRequest).filter(
+                PetShareRequest.pet_id == pet_id
+            ).delete(synchronize_session=False)
+
+            # 8️⃣ Notifications (산책/일반 알림)
+            self.db.query(Notification).filter(
+                Notification.related_pet_id == pet_id
+            ).delete(synchronize_session=False)
+
+            # 9️⃣ 마지막으로 Pet 삭제
             self.db.delete(pet)
 
+            # Commit
             self.db.commit()
 
         except Exception as e:
@@ -373,9 +410,7 @@ class PetModifyService:
             self.db.rollback()
             return error_response(500, "PET_DELETE_500_1", "반려동물 삭제 중 오류 발생", path)
 
-        # ---------------------------------------------------
-        # 🔥 Response
-        # ---------------------------------------------------
+        # 성공 응답
         return JSONResponse(
             status_code=200,
             content=jsonable_encoder(

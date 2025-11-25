@@ -69,20 +69,13 @@ class NotificationRepository:
     # 📌 읽은 사람 수 (sender 제외)
     # ------------------------------------------------------
     def get_read_count(self, notification_id: int) -> int:
-
-        notif = self.db.get(Notification, notification_id)
-        sender_id = notif.related_user_id if notif else None
-
-        query = (
+        return (
             self.db.query(NotificationRead)
             .filter(NotificationRead.notification_id == notification_id)
+            .count()
         )
 
-        # sender 제외
-        if sender_id:
-            query = query.filter(NotificationRead.user_id != sender_id)
 
-        return query.count()
 
     # ------------------------------------------------------
     # 📌 읽음 처리
@@ -108,3 +101,15 @@ class NotificationRepository:
         self.db.add(new_row)
         self.db.commit()
         return "OK"
+    
+    # ------------------------------------------------------
+    # 📌 알림 단건 조회 (읽음 처리용)
+    # ------------------------------------------------------
+    def get_notification_by_id(self, notification_id: int):
+        return (
+            self.db.query(Notification)
+            .filter(Notification.notification_id == notification_id)
+            .first()
+        )
+
+    

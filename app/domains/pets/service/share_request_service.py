@@ -91,7 +91,7 @@ class PetShareRequestService:
                 target_user_id=m.user_id,
                 type=NotificationType.REQUEST,
                 title="반려동물 공유 요청",
-                message=f"{user.nickname}님이 {pet.name} 공유 요청을 보냈습니다.",
+                message=f"{user.nickname}님이 {pet.name} 공유 요청을 보냈습니다.  우측 상단 알림창을 확인해주세요.",
                 pet_id=pet.pet_id,
                 user_id=user.user_id,
                 request_id=req.request_id,

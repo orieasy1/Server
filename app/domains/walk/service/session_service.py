@@ -193,7 +193,7 @@ class SessionService:
             )
 
         # ============================================
-        # 7-1) 산책 시작 알림 생성 (별도 트랜잭션)
+        # 7-1) 산책 시작 알림 생성 (중복 방지 적용)
         # ============================================
         try:
             family_members = (
@@ -202,9 +202,23 @@ class SessionService:
                 .all()
             )
 
-            notifications = []
-            for member in family_members:
-                notifications.append(
+            # 🔥 중복 체크: 동일 유저/동일 펫/ACTIVITY_START 알림이 방금 생성되었는지 확인
+            existing_start = (
+                self.db.query(Notification)
+                .filter(
+                    Notification.family_id == pet.family_id,
+                    Notification.related_pet_id == pet.pet_id,
+                    Notification.related_user_id == user.user_id,
+                    Notification.type == NotificationType.ACTIVITY_START,
+                    Notification.created_at >= walk.start_time  # 이번 산책 이후에 생성된 알림만 체크
+                )
+                .first()
+            )
+
+            if existing_start:
+                print("SKIP: Duplicate ACTIVITY_START notification")
+            else:
+                notifications = [
                     Notification(
                         family_id=pet.family_id,
                         target_user_id=member.user_id,
@@ -214,15 +228,16 @@ class SessionService:
                         related_pet_id=pet.pet_id,
                         related_user_id=user.user_id,
                     )
-                )
+                    for member in family_members
+                ]
 
-            self.db.add_all(notifications)
-            self.db.commit()
+                self.db.add_all(notifications)
+                self.db.commit()
 
         except Exception as e:
-            # 알림 실패는 치명적이지 않음 → rollback 후 로그만 출력
             print("NOTIFICATION_START_ERROR:", e)
             self.db.rollback()
+
 
 
         # ============================================
@@ -677,7 +692,7 @@ class SessionService:
 
 
         # ============================================
-        # 7-2) 산책 종료 알림 생성 (별도 트랜잭션)
+        # 7-2) 산책 종료 알림 생성 (중복 방지 적용)
         # ============================================
         try:
             family_members = (
@@ -686,10 +701,23 @@ class SessionService:
                 .all()
             )
 
-            notifications = []
+            # 🔥 중복 체크: 동일 유저/동일 펫/ACTIVITY_END 알림이 같은 세션에서 이미 생성됐는지 확인
+            existing_end = (
+                self.db.query(Notification)
+                .filter(
+                    Notification.family_id == pet.family_id,
+                    Notification.related_pet_id == pet.pet_id,
+                    Notification.related_user_id == user.user_id,
+                    Notification.type == NotificationType.ACTIVITY_END,
+                    Notification.created_at >= walk.start_time  # 이번 산책 세션 기간 내의 알림만 검사
+                )
+                .first()
+            )
 
-            for member in family_members:
-                notifications.append(
+            if existing_end:
+                print("SKIP: Duplicate ACTIVITY_END notification")
+            else:
+                notifications = [
                     Notification(
                         family_id=pet.family_id,
                         target_user_id=member.user_id,
@@ -699,15 +727,16 @@ class SessionService:
                         related_pet_id=pet.pet_id,
                         related_user_id=user.user_id,
                     )
-                )
+                    for member in family_members
+                ]
 
-            self.db.add_all(notifications)
-            self.db.commit()
+                self.db.add_all(notifications)
+                self.db.commit()
 
         except Exception as e:
             print("NOTIFICATION_END_ERROR:", e)
-            # 알림 실패는 비치명적 → 로그만 찍고 rollback
             self.db.rollback()
+
 
         # ============================================
         # 8) 응답 생성

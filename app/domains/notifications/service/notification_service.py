@@ -189,3 +189,106 @@ class NotificationService:
                 "알림 목록을 조회하는 중 오류가 발생했습니다.",
                 request.url.path
             )
+
+    # ============================
+    # 📌 알림 읽음 처리
+    # ============================
+    def mark_read(
+        self,
+        request: Request,
+        firebase_token: Optional[str],
+        notification_id: int
+    ):
+        path = request.url.path
+
+        # 1) 토큰 체크
+        if not firebase_token:
+            return error_response(
+                401, "NOTIF_READ_401_1",
+                "Authorization 헤더가 필요합니다.",
+                path
+            )
+
+        decoded = verify_firebase_token(firebase_token)
+        if decoded is None:
+            return error_response(
+                401, "NOTIF_READ_401_2",
+                "유효하지 않거나 만료된 Firebase ID Token입니다.",
+                path
+            )
+
+        firebase_uid = decoded["uid"]
+
+        # 2) 사용자 검사
+        user = (
+            self.db.query(User)
+            .filter(User.firebase_uid == firebase_uid)
+            .first()
+        )
+
+        if not user:
+            return error_response(
+                404, "NOTIF_READ_404_1",
+                "사용자를 찾을 수 없습니다.",
+                path
+            )
+
+        # 3) 알림 조회
+        notif = self.repo.get_notification_by_id(notification_id)
+        if not notif:
+            return error_response(
+                404, "NOTIF_READ_404_2",
+                "해당 알림을 찾을 수 없습니다.",
+                path
+            )
+
+        # 4) 이미 읽음인지 확인
+        existing = (
+            self.db.query(NotificationRead)
+            .filter(
+                NotificationRead.notification_id == notification_id,
+                NotificationRead.user_id == user.user_id
+            )
+            .first()
+        )
+
+        if existing:
+            return {
+                "success": True,
+                "status": 200,
+                "message": "이미 읽은 알림입니다.",
+                "notification_id": notification_id,
+                "timeStamp": datetime.utcnow().isoformat(),
+                "path": path
+            }
+
+        # 5) 읽음으로 저장
+        try:
+            read = NotificationRead(
+                notification_id=notification_id,
+                user_id=user.user_id,
+                read_at=datetime.utcnow(),
+            )
+
+            self.db.add(read)
+            self.db.commit()
+            self.db.refresh(read)
+
+        except Exception as e:
+            print("NOTIFICATION_READ_ERROR:", e)
+            self.db.rollback()
+            return error_response(
+                500, "NOTIF_READ_500_1",
+                "알림 읽음 처리 중 오류가 발생했습니다.",
+                path
+            )
+
+        # 6) 성공 응답
+        return {
+            "success": True,
+            "status": 200,
+            "message": "알림을 읽음 처리했습니다.",
+            "notification_id": notification_id,
+            "timeStamp": datetime.utcnow().isoformat(),
+            "path": path
+        }

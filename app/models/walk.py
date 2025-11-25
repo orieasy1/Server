@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, DECIMAL, DateTime, String, ForeignKey
+from sqlalchemy import Column, Integer, DECIMAL, Float, DateTime, String, ForeignKey
 from sqlalchemy.sql import func
 from app.models.base import Base
 
@@ -12,10 +12,10 @@ class Walk(Base):
     start_time = Column(DateTime, nullable=False)
     end_time = Column(DateTime)
     duration_min = Column(Integer)
-    distance_km = Column(DECIMAL(5, 2))
-    calories = Column(DECIMAL(6, 2))
+    distance_km = Column(Float)
+    calories = Column(Float)
 
     weather_status = Column(String(50))
-    weather_temp_c = Column(DECIMAL(4, 1))
+    weather_temp_c = Column(Float)
 
     created_at = Column(DateTime, default=func.now())

@@ -1,4 +1,4 @@
-# app/domains/ranking/service/ranking_service.py
+# app/domains/walk/service/ranking_service.py
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
@@ -21,7 +21,9 @@ class RankingService:
     def get_ranking(self, request, authorization, family_id, period, pet_id):
         path = request.url.path
 
+        # -------------------------
         # 1) Authorization
+        # -------------------------
         if authorization is None:
             return error_response(401, "WALK_RANKING_401_1", "Authorization 헤더가 필요합니다.", path)
 
@@ -32,20 +34,26 @@ class RankingService:
         if decoded is None:
             return error_response(401, "WALK_RANKING_401_2", "유효하지 않은 Firebase ID Token입니다.", path)
 
+        # -------------------------
         # 2) 유저 조회
+        # -------------------------
         firebase_uid = decoded.get("uid")
         user = self.db.query(User).filter(User.firebase_uid == firebase_uid).first()
         if not user:
             return error_response(401, "WALK_RANKING_401_3", "DB에 사용자 정보가 존재하지 않습니다.", path)
 
+        # -------------------------
         # 3) family_id 유효성
+        # -------------------------
         if family_id is None:
             return error_response(400, "WALK_RANKING_400_2", "family_id는 필수 값입니다.", path)
 
         if not self.repo.check_family_exists(family_id):
             return error_response(404, "WALK_RANKING_404_1", "해당 가족을 찾을 수 없습니다.", path)
 
+        # -------------------------
         # 4) 요청자가 family 구성원인지 확인
+        # -------------------------
         member = (
             self.db.query(FamilyMember)
             .filter(FamilyMember.family_id == family_id)
@@ -55,13 +63,16 @@ class RankingService:
         if not member:
             return error_response(403, "WALK_RANKING_403_1", "해당 가족 구성원이 아니므로 접근할 수 없습니다.", path)
 
+        # -------------------------
         # 5) 기간 계산
+        # -------------------------
         now = datetime.utcnow()
 
         if period == "weekly":
             start_dt = now - timedelta(days=now.weekday())
             start_dt = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
             end_dt = start_dt + timedelta(days=7)
+
         elif period == "monthly":
             start_dt = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             next_month = (
@@ -70,18 +81,36 @@ class RankingService:
                 else start_dt.replace(year=start_dt.year + 1, month=1)
             )
             end_dt = next_month
+
         elif period == "total":
             start_dt = datetime(2000, 1, 1)
             end_dt = datetime(3000, 1, 1)
+
         else:
             return error_response(400, "WALK_RANKING_400_1", "period는 weekly, monthly, total 중 하나여야 합니다.", path)
 
-        # 6) family 구성원 리스트
+        # -------------------------
+        # 6) family 구성원 user_id 리스트
+        # -------------------------
         user_ids = [row[0] for row in self.repo.get_family_members(family_id)]
 
+        # -------------------------
         # 7) 집계
+        # -------------------------
         stats = self.repo.get_walk_stats(user_ids, start_dt, end_dt, pet_id)
 
+        # 🔥 추가된 부분 — 스펙 404-2 반영
+        if not stats:
+            return error_response(
+                404,
+                "WALK_RANKING_404_2",
+                "이번 기간에는 산책 기록이 존재하지 않습니다.",
+                path,
+            )
+
+        # -------------------------
+        # 8) 랭킹 결과 생성
+        # -------------------------
         ranking_items = []
 
         for idx, row in enumerate(stats, start=1):
@@ -95,9 +124,9 @@ class RankingService:
                 "user_id": uid,
                 "nickname": usr.nickname,
                 "profile_img_url": usr.profile_img_url,
-                "total_distance_km": float(row[1]) if row[1] else 0.0,
-                "total_duration_min": int(row[2]) if row[2] else 0,
-                "walk_count": int(row[3]),
+                "total_distance_km": float(row.total_distance_km),
+                "total_duration_min": int(row.total_duration_min),
+                "walk_count": int(row.walk_count),
                 "pets": [
                     {
                         "pet_id": p.pet_id,
@@ -109,6 +138,9 @@ class RankingService:
                 "is_myself": (uid == user.user_id),
             })
 
+        # -------------------------
+        # 9) 최종 응답
+        # -------------------------
         response = {
             "success": True,
             "status": 200,
