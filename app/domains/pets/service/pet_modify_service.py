@@ -139,12 +139,12 @@ class PetModifyService:
 
         # 권한 체크: owner or owner_member
         if not (pet.owner_id == user.user_id or self._is_owner_member(user.user_id, pet)):
-            return error_response(403, "PET_EDIT_403_1", "수정 권한이 없습니다.", path)
+            return error_response(403, "PET_EDIT_403_1", "펫의 주인만 수정가능합니다", path)
 
-        # body empty validation (🚩 disease 포함)
+        # body empty validation (🚩 disease, image_url 포함)
         if not body or all(
             getattr(body, f) is None
-            for f in ["name", "breed", "age", "weight", "gender", "disease"]
+            for f in ["name", "breed", "age", "weight", "gender", "disease", "image_url"]
         ):
             return error_response(400, "PET_EDIT_400_1", "수정할 항목이 없습니다.", path)
 
@@ -167,6 +167,7 @@ class PetModifyService:
                 weight=body.weight,
                 gender=gender_enum,
                 disease=body.disease,   # ✅ disease 반영
+                image_url=body.image_url,  # ✅ image_url 반영
             )
         except Exception as e:
             print("PARTIAL UPDATE ERROR:", e)
@@ -278,7 +279,7 @@ class PetModifyService:
 
         # owner check
         if not (pet.owner_id == user.user_id or self._is_owner_member(user.user_id, pet)):
-            return error_response(403, "PET_IMG_403_1", "이미지 수정 권한이 없습니다.", path)
+            return error_response(403, "PET_IMG_403_1", "펫의 주인만 수정가능합니다", path)
 
         try:
             pet.image_url = image_url
