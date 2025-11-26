@@ -98,6 +98,9 @@ class NotificationService:
                 size=size,
             )
 
+            # 🔥 여기서 현재 유저에게 온 알림만 필터링
+            items = [n for n in items if n.target_user_id == user.user_id]
+
             if items is None and total == "INVALID_TYPE":
                 return error_response(
                     400, "NOTIF_LIST_400_1",

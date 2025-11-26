@@ -68,10 +68,11 @@ class NotificationRepository:
     # ------------------------------------------------------
     # 📌 읽은 사람 수 (sender 제외)
     # ------------------------------------------------------
-    def get_read_count(self, notification_id: int) -> int:
+    def get_read_count(self, notification_id):
         return (
-            self.db.query(NotificationRead)
+            self.db.query(NotificationRead.user_id)
             .filter(NotificationRead.notification_id == notification_id)
+            .distinct()
             .count()
         )
 
