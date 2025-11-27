@@ -37,7 +37,6 @@ class NotificationService:
         items, total = self.repo.get_notifications(
             user_id=user.user_id,
             pet_id=pet_id,
-            notif_type=notif_type,
             page=page,
             size=size
         )
@@ -48,7 +47,6 @@ class NotificationService:
         results = []
 
         for notif in items:
-
             # ❗ 내가 보낸 알림인지
             is_me = (notif.related_user_id == user.user_id)
 
@@ -62,59 +60,86 @@ class NotificationService:
                 .first() is not None
             )
 
-            # ❗ family 전체 인원수
-            family_count = self.repo.get_family_member_count(notif.family_id)
+            
+            if notif.target_user_id is not None:
+                unread_count = 0
+                read_count = 1
+            else:
+                # ❗ family 전체 인원수
+                family_count = self.repo.get_family_member_count(notif.family_id)
+                # ❗ 이 알림을 읽은 사람 수
+                read_count = self.repo.get_read_count(notif.notification_id)
+                unread_count = family_count - read_count
 
-            # ❗ 이 알림을 읽은 사람 수
-            read_count = self.repo.get_read_count(notif.notification_id)
+            # ❗ display_time (오전/오후)
+            display_time = (
+                notif.created_at.strftime("%p %I:%M")
+                .replace("AM", "오전")
+                .replace("PM", "오후")
+            )
 
-            # ❗ unread
-            unread_count = family_count - read_count
-
-            # ❗ display_time (오전 3:45 같은 형태로 포맷팅)
-            display_time = notif.created_at.strftime("%p %I:%M").replace("AM", "오전").replace("PM", "오후")
-
-            # ❗ display_type_label
+            # ❗ 알림 타입 라벨
             display_type_label = f"[{notif.type.value}]"
+
+            # ❗ 읽음 텍스트
+            display_read_text = f"{read_count}명 읽음"
+
+            # ❗ sender info
+            sender_profile_img_url = notif.related_user.profile_img_url if notif.related_user else None
+            sender_nickname = notif.related_user.nickname if notif.related_user else None
 
             # --------------------------------------
             # 읽음처리 (안읽었으면 기록)
             # --------------------------------------
-            if not is_read:
-                read_obj = NotificationRead(
-                    notification_id=notif.notification_id,
-                    user_id=user.user_id,
-                    read_at=datetime.utcnow()
-                )
-                self.db.add(read_obj)
-                self.db.commit()
-                is_read = True
+            if notif.target_user_id is None:
+                if not is_read:
+                    read_obj = NotificationRead(
+                        notification_id=notif.notification_id,
+                        user_id=user.user_id,
+                        read_at=datetime.utcnow()
+                    )
+                    self.db.add(read_obj)
+                    self.db.commit()
+                    is_read = True
 
-                # 다시 계산
-                read_count += 1
-                unread_count -= 1
+                    # readable 상태 업데이트
+                    read_count += 1
+                    unread_count -= 1
+                    display_read_text = f"{read_count}명 읽음"
 
             # --------------------------------------
-            # 응답에 넣기
+            # 응답에 넣기 — 전 필드 포함
             # --------------------------------------
             results.append({
                 "notification_id": notif.notification_id,
                 "type": notif.type.value,
                 "title": notif.title,
                 "message": notif.message,
+
                 "family_id": notif.family_id,
                 "target_user_id": notif.target_user_id,
+
+                # 관계
                 "related_pet": notif.related_pet,
                 "related_user": notif.related_user,
-                "created_at": notif.created_at,
+                "related_request_id": notif.related_request_id,
+                "related_lat": float(notif.related_lat) if notif.related_lat else None,
+                "related_lng": float(notif.related_lng) if notif.related_lng else None,
 
-                # ⭐ 새로운 필드들
+                # 읽음 관련
                 "is_read_by_me": is_read,
                 "is_me": is_me,
                 "read_count": read_count,
                 "unread_count": unread_count,
+
+                # 프론트 UI
                 "display_time": display_time,
                 "display_type_label": display_type_label,
+                "display_read_text": display_read_text,
+                "sender_profile_img_url": sender_profile_img_url,
+                "sender_nickname": sender_nickname,
+
+                "created_at": notif.created_at,
             })
 
         return NotificationListResponse(
@@ -190,3 +215,4 @@ class NotificationService:
             "timeStamp": datetime.utcnow().isoformat(),
             "path": path
         }
+        

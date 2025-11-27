@@ -37,7 +37,7 @@ class Notification(Base):
     related_user_id = Column(Integer, ForeignKey("users.user_id"))
 
     # 공유 요청 승인/거절을 위한 request_id ⭐
-    related_request_id = Column(Integer, ForeignKey("pet_share_requests.request_id"))
+    related_request_id = Column(Integer, ForeignKey("pet_share_requests.request_id"), nullable=True)
 
     related_lat = Column(DECIMAL(10, 7))
     related_lng = Column(DECIMAL(10, 7))

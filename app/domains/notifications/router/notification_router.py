@@ -25,7 +25,6 @@ router = APIRouter(prefix="/api/v1/notifications", tags=["Notifications"])
 def get_notifications(
     request: Request,
     pet_id: int | None = None,
-    type: str | None = None,
     page: int = 0,
     size: int = 20,
     authorization: str | None = Header(None),

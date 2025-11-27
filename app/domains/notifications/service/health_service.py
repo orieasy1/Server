@@ -49,7 +49,7 @@ class HealthService:
 
         --- 활동 정보 ---
         최근 7일 산책 시간: {weekly_minutes}분
-        추천 산책: 최소 {rec_info["min_minutes"]}, 적정 {rec_info["recommended_minutes"]}, 최대 {rec_info["max_minutes"]}
+        추천 산책: 하루 최소 {rec_info["min_minutes"]}, 하루 적정 {rec_info["recommended_minutes"]}, 하루 최대 {rec_info["max_minutes"]}
 
         message는 3~5문장, title은 한 문장.
         """

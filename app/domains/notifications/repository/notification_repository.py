@@ -17,11 +17,10 @@ class NotificationRepository:
         self,
         user_id: int,
         pet_id: int | None,
-        notif_type: str | None,
         page: int,
         size: int
     ):
-        # 사용자가 속한 family_id 목록
+        # 사용자가 속한 family_id
         family_ids = (
             self.db.query(FamilyMember.family_id)
             .filter(FamilyMember.user_id == user_id)
@@ -33,30 +32,19 @@ class NotificationRepository:
             .options(
                 joinedload(Notification.related_user),
                 joinedload(Notification.related_pet),
+                joinedload(Notification.related_request),    # ⭐ 추가
             )
             .filter(
-                # 개인 알림
                 (Notification.target_user_id == user_id)
                 |
-                # 가족 공용 알림
                 ((Notification.target_user_id.is_(None)) &
                  (Notification.family_id.in_(family_ids)))
             )
         )
 
-        # pet 필터
         if pet_id is not None:
             query = query.filter(Notification.related_pet_id == pet_id)
 
-        # type 필터
-        if notif_type is not None:
-            try:
-                t_enum = NotificationType[notif_type]
-                query = query.filter(Notification.type == t_enum)
-            except KeyError:
-                return None, "INVALID_TYPE"
-
-        # 채팅 스타일 → 오래된 순
         query = query.order_by(Notification.created_at.asc())
 
         total = query.count()
@@ -89,7 +77,7 @@ class NotificationRepository:
     # 📌 읽음 처리
     # ============================
     def mark_as_read(self, notification_id: int, user_id: int):
-        existing = (
+        exists = (
             self.db.query(NotificationRead)
             .filter(
                 NotificationRead.notification_id == notification_id,
@@ -98,7 +86,7 @@ class NotificationRepository:
             .first()
         )
 
-        if existing:
+        if exists:
             return "ALREADY_READ"
 
         new_row = NotificationRead(
@@ -106,7 +94,6 @@ class NotificationRepository:
             user_id=user_id
         )
         self.db.add(new_row)
-        self.db.commit()
         return "OK"
 
     # ============================
@@ -120,31 +107,33 @@ class NotificationRepository:
         )
 
     # ============================
-    # 📌 알림 생성
+    # 📌 알림 생성 (모든 타입 지원)
     # ============================
     def create_notification(
         self,
         family_id: int,
-        related_pet_id: int,
-        related_user_id: int,
+        target_user_id: int | None,
+        related_pet_id: int | None,
+        related_user_id: int | None,
         notif_type: NotificationType,
         title: str,
         message: str,
-        target_user_id=None,   # ⭐ None이면 Broadcast
+        related_request_id: int | None = None,
     ):
         notif = Notification(
             family_id=family_id,
             target_user_id=target_user_id,
             related_pet_id=related_pet_id,
             related_user_id=related_user_id,
+            related_request_id=related_request_id,
             type=notif_type,
             title=title,
             message=message,
         )
         self.db.add(notif)
-        self.db.flush()  # notification_id 확보
+        self.db.flush()
 
-        # ⭐ 개인 알림인 경우 즉시 읽음 처리
+        # 개인 알림이면 자동 읽음 처리
         if target_user_id is not None:
             read = NotificationRead(
                 notification_id=notif.notification_id,
@@ -153,3 +142,4 @@ class NotificationRepository:
             self.db.add(read)
 
         return notif
+
