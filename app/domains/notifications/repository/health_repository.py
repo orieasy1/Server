@@ -1,7 +1,7 @@
 # app/domains/notifications/repository/health_repository.py
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func
 from datetime import datetime, timedelta
 
 from app.models.pet import Pet
@@ -15,7 +15,7 @@ class HealthRepository:
         self.db = db
 
     # -----------------------
-    # pet 조회
+    # PET 조회
     # -----------------------
     def get_pet(self, pet_id: int):
         return (
@@ -25,7 +25,7 @@ class HealthRepository:
         )
 
     # -----------------------
-    # user → 같은 family인지 확인
+    # user가 family 소속인지 체크
     # -----------------------
     def user_in_family(self, user_id: int, family_id: int):
         return (
@@ -39,22 +39,21 @@ class HealthRepository:
         )
 
     # -----------------------
-    # 최근 7일 산책 시간(분)
+    # 최근 7일 산책 시간(분) 총합
     # -----------------------
     def get_weekly_walk_minutes(self, pet_id: int):
         seven_days_ago = datetime.utcnow() - timedelta(days=7)
 
-        result = (
+        total = (
             self.db.query(func.sum(Walk.duration_min))
             .filter(
                 Walk.pet_id == pet_id,
-                Walk.end_time != None,
                 Walk.start_time >= seven_days_ago
             )
             .scalar()
         )
 
-        return int(result or 0)  # None → 0
+        return int(total or 0)
 
     # -----------------------
     # 추천 산책 정보
