@@ -4,12 +4,14 @@ from app.domains.pets.router.register_router import router as pet_register_route
 from app.domains.pets.router.share_request_router import router as pet_share_router
 from app.domains.pets.router.my_pets_router import router as my_pets_router
 from app.domains.walk.router.recommendation_router import router as walk_recommendation_router
+from app.domains.walk.router.walk_save_router import router as walk_save_router
 from app.domains.record.router.walk_router import router as record_walk_router
 from app.domains.users.router.family_member_router import router as family_member_router
 from app.domains.users.router.users_router import router as user_router
 from app.domains.notifications.router.notification_router import router as notifications_router
 from app.domains.notifications.router.health_router import router as health_router
 from app.domains.notifications.router.weather_router import router as weather_router
+from app.domains.weather.router.weather_router import router as current_weather_router
 from app.domains.walk.router.ranking_router import router as ranking_router
 
 
@@ -45,6 +47,7 @@ def create_app() -> FastAPI:
 
     # Walk Recommendation/Domain API
     app.include_router(walk_recommendation_router)
+    app.include_router(walk_save_router)
     app.include_router(ranking_router)
 
     # Record APIs
@@ -54,6 +57,9 @@ def create_app() -> FastAPI:
     app.include_router(notifications_router)
     app.include_router(health_router)
     app.include_router(weather_router)
+    
+    # Weather API
+    app.include_router(current_weather_router)
 
 
     @app.get("/")
