@@ -4,6 +4,11 @@ from app.domains.pets.router.register_router import router as pet_register_route
 from app.domains.pets.router.share_request_router import router as pet_share_router
 from app.domains.pets.router.my_pets_router import router as my_pets_router
 from app.domains.walk.router.recommendation_router import router as walk_recommendation_router
+from app.domains.walk.router.today_router import router as walk_today_router
+from app.domains.walk.router.goal_router import router as walk_goal_router
+from app.domains.walk.router.session_router import router as walk_session_router
+from app.domains.walk.router.weather_router import router as walk_weather_router
+from app.domains.walk.router.photo_router import router as walk_photo_router
 from app.domains.walk.router.walk_save_router import router as walk_save_router
 from app.domains.walk.router.ranking_router import router as ranking_router
 from app.domains.record.router.walk_router import router as record_walk_router
@@ -45,8 +50,13 @@ def create_app() -> FastAPI:
     app.include_router(pet_share_router)
     app.include_router(my_pets_router)
 
-    # Walk Recommendation/Domain API
+    # Walk APIs
     app.include_router(walk_recommendation_router)
+    app.include_router(walk_today_router)
+    app.include_router(walk_goal_router)
+    app.include_router(walk_session_router)
+    app.include_router(walk_weather_router)
+    app.include_router(walk_photo_router)
     app.include_router(walk_save_router)
     app.include_router(ranking_router)
 
