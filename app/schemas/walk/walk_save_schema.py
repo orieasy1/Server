@@ -47,3 +47,4 @@ class WalkSaveResponse(BaseModel):
     timeStamp: str = Field(..., description="응답 시간 (ISO 형식)")
     path: str = Field(..., description="요청 경로")
 
+
