@@ -11,8 +11,9 @@ from app.core.error_handler import error_response
 from app.models.user import User
 from app.models.pet import Pet
 from app.models.family_member import FamilyMember
-from app.models.notification import Notification, NotificationType
+from app.models.notification import NotificationType
 from app.domains.walk.repository.session_repository import SessionRepository
+from app.domains.notifications.repository.notification_repository import NotificationRepository
 from app.schemas.walk.session_schema import WalkStartRequest, WalkTrackRequest, WalkEndRequest
 
 
@@ -20,6 +21,7 @@ class SessionService:
     def __init__(self, db: Session):
         self.db = db
         self.session_repo = SessionRepository(db)
+        self.notification_repo = NotificationRepository(db)
 
     def start_walk(
         self,
@@ -192,38 +194,31 @@ class SessionService:
                 path
             )
 
-                # ============================================
+        # ============================================
         # 7-1) 산책 시작 알림 생성 (FAMILY 기준 1개)
         # ============================================
         try:
             # 🔥 기존 중복 알림 방지 로직: 시작시간 이후 이미 생성된 알림이 있는지 확인
-            existing_start = (
-                self.db.query(Notification)
-                .filter(
-                    Notification.family_id == pet.family_id,
-                    Notification.related_pet_id == pet.pet_id,
-                    Notification.related_user_id == user.user_id,
-                    Notification.type == NotificationType.ACTIVITY_START,
-                    Notification.created_at >= walk.start_time,
-                )
-                .first()
+            existing = self.notification_repo.check_existing_activity_notification(
+                family_id=pet.family_id,
+                related_pet_id=pet.pet_id,
+                related_user_id=user.user_id,
+                notif_type=NotificationType.ACTIVITY_START,
+                since_time=walk.start_time,
             )
 
-            if existing_start:
+            if existing:
                 print("SKIP: Duplicate ACTIVITY_START notification")
-
             else:
-                notif = Notification(
+                self.notification_repo.create_notification(
                     family_id=pet.family_id,
                     target_user_id=None,  # ⭐ 가족 전체에게 보여주는 공용 알림
-                    type=NotificationType.ACTIVITY_START,
-                    title="산책 시작",
-                    message=f"{user.nickname}님이 {pet.name}와 산책을 시작했습니다.",
                     related_pet_id=pet.pet_id,
                     related_user_id=user.user_id,
+                    notif_type=NotificationType.ACTIVITY_START,
+                    title="산책 시작",
+                    message=f"{user.nickname}님이 {pet.name}와 산책을 시작했습니다.",
                 )
-
-                self.db.add(notif)
                 self.db.commit()
 
         except Exception as e:
@@ -650,29 +645,24 @@ class SessionService:
         # 8) 알림 생성 (FAMILY 전체)
         # ============================================
         try:
-            existing_end = (
-                self.db.query(Notification)
-                .filter(
-                    Notification.family_id == pet.family_id,
-                    Notification.related_pet_id == pet.pet_id,
-                    Notification.related_user_id == user.user_id,
-                    Notification.type == NotificationType.ACTIVITY_END,
-                    Notification.created_at >= walk.start_time,
-                )
-                .first()
+            existing = self.notification_repo.check_existing_activity_notification(
+                family_id=pet.family_id,
+                related_pet_id=pet.pet_id,
+                related_user_id=user.user_id,
+                notif_type=NotificationType.ACTIVITY_END,
+                since_time=walk.start_time,
             )
 
-            if not existing_end:
-                notif = Notification(
+            if not existing:
+                self.notification_repo.create_notification(
                     family_id=pet.family_id,
-                    target_user_id=None,
-                    type=NotificationType.ACTIVITY_END,
-                    title="산책 종료",
-                    message=f"{user.nickname}님이 {pet.name}와 산책을 종료했습니다.",
+                    target_user_id=None,  # ⭐ 가족 전체에게 보여주는 공용 알림
                     related_pet_id=pet.pet_id,
                     related_user_id=user.user_id,
+                    notif_type=NotificationType.ACTIVITY_END,
+                    title="산책 종료",
+                    message=f"{user.nickname}님이 {pet.name}와 산책을 종료했습니다.",
                 )
-                self.db.add(notif)
                 self.db.commit()
 
         except Exception as e:

@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
+from datetime import datetime
 
 from app.models.notification import Notification, NotificationType
 from app.models.notification_reads import NotificationRead
@@ -142,4 +143,32 @@ class NotificationRepository:
             self.db.add(read)
 
         return notif
+
+    # ============================
+    # 📌 중복 알림 체크 (활동 시작/종료용)
+    # ============================
+    def check_existing_activity_notification(
+        self,
+        family_id: int,
+        related_pet_id: int,
+        related_user_id: int,
+        notif_type: NotificationType,
+        since_time: datetime,
+    ) -> bool:
+        """
+        특정 시간 이후에 동일한 활동 알림이 이미 존재하는지 확인
+        Returns: True if exists, False otherwise
+        """
+        existing = (
+            self.db.query(Notification)
+            .filter(
+                Notification.family_id == family_id,
+                Notification.related_pet_id == related_pet_id,
+                Notification.related_user_id == related_user_id,
+                Notification.type == notif_type,
+                Notification.created_at >= since_time,
+            )
+            .first()
+        )
+        return existing is not None
 

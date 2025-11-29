@@ -77,3 +77,4 @@ async def get_current_weather(
             detail=f"Internal server error: {str(e)}"
         )
 
+
