@@ -256,8 +256,9 @@ class PetRegisterService:
                 "age": pet.age,
                 "weight": pet.weight,
                 "gender": pet.gender.value if pet.gender else None,
-                "disease": pet.disease,
+                "disease": getattr(pet, 'disease', None),
                 "image_url": pet.image_url,
+                "voice_url": getattr(pet, 'voice_url', None),
                 "created_at": pet.created_at.isoformat() if pet.created_at else None,
                 "updated_at": pet.updated_at.isoformat() if pet.updated_at else None,
 

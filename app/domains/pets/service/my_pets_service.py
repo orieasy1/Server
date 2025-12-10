@@ -86,6 +86,8 @@ class MyPetsService:
                 "weight": pet.weight,
                 "gender": pet.gender.value if pet.gender else None,
                 "image_url": pet.image_url,
+                "disease": getattr(pet, 'disease', None),
+                "voice_url": getattr(pet, 'voice_url', None),
                 "created_at": pet.created_at.isoformat() if pet.created_at else None,
                 "updated_at": pet.updated_at.isoformat() if pet.updated_at else None,
             })

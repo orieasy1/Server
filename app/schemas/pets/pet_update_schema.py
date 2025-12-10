@@ -13,6 +13,7 @@ class PetUpdateRequest(BaseModel):
         description="기저 질환 정보 (예: 심장병, 관절염). 없으면 null"
     )
     image_url: Optional[str] = Field(None, description="반려동물 프로필 이미지 URL")
+    voice_url: Optional[str] = Field(None, description="반려동물 음성 녹음 URL (Firebase Storage 등)")
     
 class PetUpdateResponse(BaseModel):
     """반려동물 정보 수정 응답"""

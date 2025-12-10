@@ -25,6 +25,7 @@ class Pet(Base):
 
     disease = Column(String(255))
     image_url = Column(String(255))
+    voice_url = Column(String(255))  # 반려동물 음성 녹음 URL
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

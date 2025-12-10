@@ -141,10 +141,10 @@ class PetModifyService:
         if not (pet.owner_id == user.user_id or self._is_owner_member(user.user_id, pet)):
             return error_response(403, "PET_EDIT_403_1", "펫의 주인만 수정가능합니다", path)
 
-        # body empty validation (🚩 disease, image_url 포함)
+        # body empty validation (🚩 disease, image_url, voice_url 포함)
         if not body or all(
             getattr(body, f) is None
-            for f in ["name", "breed", "age", "weight", "gender", "disease", "image_url"]
+            for f in ["name", "breed", "age", "weight", "gender", "disease", "image_url", "voice_url"]
         ):
             return error_response(400, "PET_EDIT_400_1", "수정할 항목이 없습니다.", path)
 
@@ -168,6 +168,7 @@ class PetModifyService:
                 gender=gender_enum,
                 disease=body.disease,   # ✅ disease 반영
                 image_url=body.image_url,  # ✅ image_url 반영
+                voice_url=body.voice_url,  # ✅ voice_url 반영
             )
         except Exception as e:
             print("PARTIAL UPDATE ERROR:", e)
@@ -213,8 +214,9 @@ class PetModifyService:
                 "age": updated_pet.age,
                 "weight": updated_pet.weight,
                 "gender": updated_pet.gender.value if updated_pet.gender else None,
-                "disease": updated_pet.disease,   # ✅ 응답에도 포함
+                "disease": getattr(updated_pet, 'disease', None),   # ✅ 응답에도 포함
                 "image_url": updated_pet.image_url,
+                "voice_url": getattr(updated_pet, 'voice_url', None),  # ✅ voice_url 응답에도 포함
                 "created_at": updated_pet.created_at.isoformat(),
                 "updated_at": updated_pet.updated_at.isoformat(),
             },

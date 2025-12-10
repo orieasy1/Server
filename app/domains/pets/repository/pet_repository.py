@@ -54,6 +54,7 @@ class PetRepository:
             gender=gender,                 # 🔥 여기 Enum(or None) 들어감
             disease=body.disease,
             image_url=body.image_url,
+            voice_url=getattr(body, 'voice_url', None),  # 음성 녹음 URL
         )
         self.db.add(pet)
         self.db.flush()  # pet.pet_id 사용 가능
