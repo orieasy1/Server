@@ -17,6 +17,7 @@ from app.domains.users.router.users_router import router as user_router
 from app.domains.notifications.router.notification_router import router as notifications_router
 from app.domains.notifications.router.health_router import router as health_router
 from app.domains.notifications.router.weather_router import router as weather_router
+from app.domains.notifications.router.sos_router import router as sos_router
 from app.domains.weather.router.weather_router import router as current_weather_router
 
 
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(notifications_router)
     app.include_router(health_router)
     app.include_router(weather_router)
+    app.include_router(sos_router)
     
     # Weather API
     app.include_router(current_weather_router)
