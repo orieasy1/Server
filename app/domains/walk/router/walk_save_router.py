@@ -1,11 +1,18 @@
 from fastapi import APIRouter, Header, Request, Depends
 from sqlalchemy.orm import Session
 from typing import Optional
+from pydantic import BaseModel, Field
 
 from app.db import get_db
 from app.domains.walk.service.walk_save_service import WalkSaveService
 from app.schemas.error_schema import ErrorResponse
 from app.schemas.walk.walk_save_schema import WalkSaveRequest, WalkSaveResponse
+
+
+# 산책 시작 알림 요청 스키마
+class WalkStartNotifyRequest(BaseModel):
+    pet_id: int = Field(..., description="반려동물 ID")
+
 
 router = APIRouter(
     prefix="/api/v1",
@@ -46,6 +53,39 @@ def save_walk(
         request=request,
         authorization=authorization,
         body=body,
+    )
+
+
+@router.post(
+    "/walks/notify-start",
+    summary="산책 시작 알림 전송",
+    description="산책 시작 시 가족 멤버들에게 알림을 전송합니다.",
+    status_code=200,
+    responses={
+        401: {"model": ErrorResponse, "description": "인증 실패"},
+        403: {"model": ErrorResponse, "description": "권한 없음"},
+        404: {"model": ErrorResponse, "description": "반려동물을 찾을 수 없음"},
+        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
+    },
+)
+def notify_walk_start(
+    request: Request,
+    body: WalkStartNotifyRequest,
+    authorization: Optional[str] = Header(None, description="Firebase ID 토큰"),
+    db: Session = Depends(get_db),
+):
+    """
+    산책 시작 시 가족 멤버들에게 알림을 전송합니다.
+    
+    - body: pet_id (산책할 반려동물 ID)
+    - 권한 체크: 해당 반려동물의 family_members에 속한 사용자만 가능
+    - 가족 멤버들에게 푸시 알림 + DB 알림 저장
+    """
+    service = WalkSaveService(db)
+    return service.notify_walk_start(
+        request=request,
+        authorization=authorization,
+        pet_id=body.pet_id,
     )
 
 

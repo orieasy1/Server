@@ -6,7 +6,7 @@ from typing import Optional
 from datetime import datetime
 import pytz
 
-from app.core.firebase import verify_firebase_token
+from app.core.firebase import verify_firebase_token, send_push_notification_to_multiple
 from app.core.error_handler import error_response
 from app.models.user import User
 from app.models.pet import Pet
@@ -14,14 +14,76 @@ from app.models.family_member import FamilyMember
 from app.models.walk import Walk
 from app.models.photo import Photo
 from app.models.walk_tracking_point import WalkTrackingPoint
+from app.models.notification import NotificationType
 from app.schemas.walk.walk_save_schema import WalkSaveRequest
 from app.domains.walk.repository.session_repository import SessionRepository
+from app.domains.notifications.repository.notification_repository import NotificationRepository
 
 
 class WalkSaveService:
     def __init__(self, db: Session):
         self.db = db
         self.session_repo = SessionRepository(db)
+        self.notification_repo = NotificationRepository(db)
+
+    def _send_walk_complete_fcm_push(
+        self,
+        family_id: int,
+        exclude_user_id: int,
+        title: str,
+        body: str,
+        data: Optional[dict] = None,
+    ):
+        """
+        가족 멤버들에게 산책 완료 FCM 푸시 알림을 발송합니다.
+        산책한 본인은 제외합니다.
+        """
+        try:
+            print(f"[FCM DEBUG] _send_walk_complete_fcm_push called: family_id={family_id}, exclude_user_id={exclude_user_id}")
+            
+            # 가족 멤버 조회
+            family_members = (
+                self.db.query(FamilyMember)
+                .filter(FamilyMember.family_id == family_id)
+                .all()
+            )
+            
+            print(f"[FCM DEBUG] Family members count: {len(family_members)}")
+
+            # FCM 토큰 수집 (본인 제외)
+            fcm_tokens = []
+            for m in family_members:
+                print(f"[FCM DEBUG] Member user_id={m.user_id}, exclude_user_id={exclude_user_id}")
+                if m.user_id == exclude_user_id:
+                    print(f"[FCM DEBUG] Skipping user {m.user_id} (self)")
+                    continue  # 본인 제외
+                
+                target_user = self.db.get(User, m.user_id)
+                if target_user:
+                    print(f"[FCM DEBUG] User {m.user_id} fcm_token: {target_user.fcm_token[:20] if target_user.fcm_token else 'None'}...")
+                    if target_user.fcm_token:
+                        fcm_tokens.append(target_user.fcm_token)
+                else:
+                    print(f"[FCM DEBUG] User {m.user_id} not found")
+
+            print(f"[FCM DEBUG] Collected FCM tokens: {len(fcm_tokens)}")
+
+            # FCM 푸시 발송
+            if fcm_tokens:
+                result = send_push_notification_to_multiple(
+                    fcm_tokens=fcm_tokens,
+                    title=title,
+                    body=body,
+                    data=data,
+                )
+                print(f"[FCM] Walk complete push sent: success={result['success_count']}, failure={result['failure_count']}")
+            else:
+                print("[FCM] No FCM tokens to send walk complete notification")
+
+        except Exception as e:
+            print(f"[FCM] Walk complete push error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def save_walk(
         self,
@@ -215,6 +277,56 @@ class WalkSaveService:
             )
 
         # ============================================
+        # 5-1) 산책 완료 알림 생성 + FCM 푸시 발송
+        # ============================================
+        try:
+            # 산책 결과 정보
+            walk_summary = ""
+            if body.duration_min:
+                walk_summary += f"{body.duration_min}분"
+            if body.distance_km:
+                walk_summary += f" {body.distance_km:.1f}km"
+            
+            notification_message = f"{user.nickname}님이 {pet.name}와 산책을 마쳤습니다."
+            if walk_summary.strip():
+                notification_message += f" ({walk_summary.strip()})"
+            
+            # 알림 생성 (family 전체)
+            self.notification_repo.create_notification(
+                family_id=pet.family_id,
+                target_user_id=None,  # 가족 전체에게 보여주는 공용 알림
+                related_pet_id=pet.pet_id,
+                related_user_id=user.user_id,
+                notif_type=NotificationType.ACTIVITY_END,
+                title="산책 완료",
+                message=notification_message,
+            )
+            self.db.commit()
+            
+            # 🔔 FCM 푸시 알림 발송 (산책한 본인 제외)
+            self._send_walk_complete_fcm_push(
+                family_id=pet.family_id,
+                exclude_user_id=user.user_id,
+                title="✅ 산책 완료",
+                body=notification_message,
+                data={
+                    "type": "WALK_END",
+                    "walk_id": walk.walk_id,
+                    "pet_id": pet.pet_id,
+                    "pet_name": pet.name or "",
+                    "user_nickname": user.nickname or "",
+                    "duration_min": str(body.duration_min) if body.duration_min else "",
+                    "distance_km": str(body.distance_km) if body.distance_km else "",
+                },
+            )
+            
+        except Exception as e:
+            print("WALK_SAVE_NOTIFICATION_ERROR:", e)
+            import traceback
+            traceback.print_exc()
+            # 알림 실패해도 산책 저장은 성공으로 처리
+
+        # ============================================
         # 6) 응답 생성
         # ============================================
         response_content = {
@@ -233,6 +345,161 @@ class WalkSaveService:
                 "weather_temp_c": float(walk.weather_temp_c) if walk.weather_temp_c is not None else None,
                 "thumbnail_image_url": thumbnail_url,
             },
+            "timeStamp": datetime.utcnow().isoformat(),
+            "path": path
+        }
+
+        encoded = jsonable_encoder(response_content)
+        return JSONResponse(status_code=200, content=encoded)
+
+    def notify_walk_start(
+        self,
+        request,
+        authorization: Optional[str],
+        pet_id: int,
+    ):
+        """
+        산책 시작 시 가족 멤버들에게 알림을 전송합니다.
+        """
+        path = request.url.path
+
+        # ============================================
+        # 1) Authorization 검증
+        # ============================================
+        if authorization is None:
+            return error_response(
+                401, "WALK_NOTIFY_401_1", "Authorization 헤더가 필요합니다.", path
+            )
+
+        if not authorization.startswith("Bearer "):
+            return error_response(
+                401, "WALK_NOTIFY_401_2",
+                "Authorization 헤더는 'Bearer <token>' 형식이어야 합니다.",
+                path
+            )
+
+        parts = authorization.split(" ")
+        if len(parts) != 2:
+            return error_response(
+                401, "WALK_NOTIFY_401_2",
+                "Authorization 헤더 형식이 잘못되었습니다.",
+                path
+            )
+
+        id_token = parts[1]
+        decoded = verify_firebase_token(id_token)
+
+        if decoded is None:
+            return error_response(
+                401, "WALK_NOTIFY_401_2",
+                "유효하지 않거나 만료된 Firebase ID Token입니다. 다시 로그인해주세요.",
+                path
+            )
+
+        firebase_uid = decoded.get("uid")
+
+        # ============================================
+        # 2) 사용자 조회
+        # ============================================
+        user: User = (
+            self.db.query(User)
+            .filter(User.firebase_uid == firebase_uid)
+            .first()
+        )
+
+        if not user:
+            return error_response(
+                404, "WALK_NOTIFY_404_1",
+                "해당 사용자를 찾을 수 없습니다.",
+                path
+            )
+
+        # ============================================
+        # 3) 반려동물 조회 및 권한 체크
+        # ============================================
+        pet: Pet = (
+            self.db.query(Pet)
+            .filter(Pet.pet_id == pet_id)
+            .first()
+        )
+
+        if not pet:
+            return error_response(
+                404, "WALK_NOTIFY_404_2",
+                "요청하신 반려동물을 찾을 수 없습니다.",
+                path
+            )
+
+        # 권한 체크
+        family_member: FamilyMember = (
+            self.db.query(FamilyMember)
+            .filter(
+                FamilyMember.family_id == pet.family_id,
+                FamilyMember.user_id == user.user_id
+            )
+            .first()
+        )
+
+        if not family_member:
+            return error_response(
+                403, "WALK_NOTIFY_403_1",
+                "해당 반려동물의 산책 알림을 보낼 권한이 없습니다.",
+                path
+            )
+
+        # ============================================
+        # 4) 산책 시작 알림 생성 + FCM 푸시 발송
+        # ============================================
+        try:
+            notification_message = f"{user.nickname}님이 {pet.name}와 산책을 시작했습니다."
+            
+            # 알림 생성 (family 전체)
+            self.notification_repo.create_notification(
+                family_id=pet.family_id,
+                target_user_id=None,  # 가족 전체에게 보여주는 공용 알림
+                related_pet_id=pet.pet_id,
+                related_user_id=user.user_id,
+                notif_type=NotificationType.ACTIVITY_START,
+                title="산책 시작",
+                message=notification_message,
+            )
+            self.db.commit()
+            
+            # 🔔 FCM 푸시 알림 발송 (산책 시작한 본인 제외)
+            self._send_walk_complete_fcm_push(
+                family_id=pet.family_id,
+                exclude_user_id=user.user_id,
+                title="🚶 산책 시작",
+                body=notification_message,
+                data={
+                    "type": "WALK_START",
+                    "pet_id": pet.pet_id,
+                    "pet_name": pet.name or "",
+                    "user_nickname": user.nickname or "",
+                },
+            )
+            
+            print(f"[WALK_START] Notification sent for pet {pet.pet_id} by user {user.user_id}")
+            
+        except Exception as e:
+            print("WALK_START_NOTIFICATION_ERROR:", e)
+            import traceback
+            traceback.print_exc()
+            return error_response(
+                500, "WALK_NOTIFY_500_1",
+                "산책 시작 알림을 전송하는 중 오류가 발생했습니다.",
+                path
+            )
+
+        # ============================================
+        # 5) 응답 생성
+        # ============================================
+        response_content = {
+            "success": True,
+            "status": 200,
+            "message": "산책 시작 알림이 전송되었습니다.",
+            "pet_id": pet.pet_id,
+            "pet_name": pet.name,
             "timeStamp": datetime.utcnow().isoformat(),
             "path": path
         }

@@ -6,7 +6,7 @@ from typing import Optional
 from datetime import datetime, date
 import pytz
 
-from app.core.firebase import verify_firebase_token
+from app.core.firebase import verify_firebase_token, send_push_notification_to_multiple
 from app.core.error_handler import error_response
 from app.models.user import User
 from app.models.pet import Pet
@@ -22,6 +22,65 @@ class SessionService:
         self.db = db
         self.session_repo = SessionRepository(db)
         self.notification_repo = NotificationRepository(db)
+
+    def _send_walk_fcm_push(
+        self,
+        family_id: int,
+        exclude_user_id: int,
+        title: str,
+        body: str,
+        data: Optional[dict] = None,
+    ):
+        """
+        가족 멤버들에게 산책 관련 FCM 푸시 알림을 발송합니다.
+        산책을 시작/종료한 본인은 제외합니다.
+        """
+        try:
+            print(f"[FCM DEBUG] _send_walk_fcm_push called: family_id={family_id}, exclude_user_id={exclude_user_id}")
+            
+            # 가족 멤버 조회
+            family_members = (
+                self.db.query(FamilyMember)
+                .filter(FamilyMember.family_id == family_id)
+                .all()
+            )
+            
+            print(f"[FCM DEBUG] Family members count: {len(family_members)}")
+
+            # FCM 토큰 수집 (본인 제외)
+            fcm_tokens = []
+            for m in family_members:
+                print(f"[FCM DEBUG] Member user_id={m.user_id}, exclude_user_id={exclude_user_id}")
+                if m.user_id == exclude_user_id:
+                    print(f"[FCM DEBUG] Skipping user {m.user_id} (self)")
+                    continue  # 본인 제외
+                
+                target_user = self.db.get(User, m.user_id)
+                if target_user:
+                    print(f"[FCM DEBUG] User {m.user_id} fcm_token: {target_user.fcm_token[:20] if target_user.fcm_token else 'None'}...")
+                    if target_user.fcm_token:
+                        fcm_tokens.append(target_user.fcm_token)
+                else:
+                    print(f"[FCM DEBUG] User {m.user_id} not found")
+
+            print(f"[FCM DEBUG] Collected FCM tokens: {len(fcm_tokens)}")
+
+            # FCM 푸시 발송
+            if fcm_tokens:
+                result = send_push_notification_to_multiple(
+                    fcm_tokens=fcm_tokens,
+                    title=title,
+                    body=body,
+                    data=data,
+                )
+                print(f"[FCM] Walk push sent: success={result['success_count']}, failure={result['failure_count']}")
+            else:
+                print("[FCM] No FCM tokens to send walk notification")
+
+        except Exception as e:
+            print(f"[FCM] Walk push error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def start_walk(
         self,
@@ -195,7 +254,7 @@ class SessionService:
             )
 
         # ============================================
-        # 7-1) 산책 시작 알림 생성 (FAMILY 기준 1개)
+        # 7-1) 산책 시작 알림 생성 (FAMILY 기준 1개) + FCM 푸시
         # ============================================
         try:
             # 🔥 기존 중복 알림 방지 로직: 시작시간 이후 이미 생성된 알림이 있는지 확인
@@ -220,6 +279,21 @@ class SessionService:
                     message=f"{user.nickname}님이 {pet.name}와 산책을 시작했습니다.",
                 )
                 self.db.commit()
+
+                # 🔔 FCM 푸시 알림 발송 (산책 시작한 본인 제외)
+                self._send_walk_fcm_push(
+                    family_id=pet.family_id,
+                    exclude_user_id=user.user_id,
+                    title="🚶 산책 시작",
+                    body=f"{user.nickname}님이 {pet.name}와 산책을 시작했습니다.",
+                    data={
+                        "type": "WALK_START",
+                        "walk_id": walk.walk_id,
+                        "pet_id": pet.pet_id,
+                        "pet_name": pet.name or "",
+                        "user_nickname": user.nickname or "",
+                    },
+                )
 
         except Exception as e:
             print("NOTIFICATION_START_ERROR:", e)
@@ -643,7 +717,7 @@ class SessionService:
             return error_response(500, "WALK_END_500_1", "산책을 종료하는 중 오류가 발생했습니다.", path)
 
         # ============================================
-        # 8) 알림 생성 (FAMILY 전체)
+        # 8) 알림 생성 (FAMILY 전체) + FCM 푸시
         # ============================================
         try:
             existing = self.notification_repo.check_existing_activity_notification(
@@ -665,6 +739,34 @@ class SessionService:
                     message=f"{user.nickname}님이 {pet.name}와 산책을 종료했습니다.",
                 )
                 self.db.commit()
+
+                # 🔔 FCM 푸시 알림 발송 (산책 종료한 본인 제외)
+                # 산책 결과 정보 포함
+                walk_summary = ""
+                if duration_min:
+                    walk_summary += f"{duration_min}분"
+                if distance_km:
+                    walk_summary += f" {distance_km:.1f}km"
+                
+                push_body = f"{user.nickname}님이 {pet.name}와 산책을 마쳤습니다."
+                if walk_summary:
+                    push_body += f" ({walk_summary.strip()})"
+
+                self._send_walk_fcm_push(
+                    family_id=pet.family_id,
+                    exclude_user_id=user.user_id,
+                    title="✅ 산책 종료",
+                    body=push_body,
+                    data={
+                        "type": "WALK_END",
+                        "walk_id": updated_walk.walk_id,
+                        "pet_id": pet.pet_id,
+                        "pet_name": pet.name or "",
+                        "user_nickname": user.nickname or "",
+                        "duration_min": str(duration_min) if duration_min else "",
+                        "distance_km": str(distance_km) if distance_km else "",
+                    },
+                )
 
         except Exception as e:
             print("NOTIFICATION_END_ERROR:", e)
