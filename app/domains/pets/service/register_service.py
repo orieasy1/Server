@@ -11,7 +11,7 @@ from openai import OpenAI
 
 from app.core.config import settings
 from app.core.firebase import verify_firebase_token
-from app.core.error_handler import error_response
+from app.domains.pets.exception import pet_error
 from app.models.user import User
 
 # 통합된 repository 구조 기준
@@ -113,15 +113,15 @@ class PetRegisterService:
 
         # Auth
         if authorization is None:
-            return error_response(401, "PET_401_1", "Authorization 헤더가 필요합니다.", path)
+            return pet_error("PET_401_1", path)
 
         if not authorization.startswith("Bearer "):
-            return error_response(401, "PET_401_2", "Authorization 헤더는 'Bearer <token>' 형식이어야 합니다.", path)
+            return pet_error("PET_401_2", path)
 
         token = authorization.split(" ")[1]
         decoded = verify_firebase_token(token)
         if decoded is None:
-            return error_response(401, "PET_401_2", "유효하지 않거나 만료된 Firebase 토큰입니다.", path)
+            return pet_error("PET_401_2", path)
 
         firebase_uid = decoded.get("uid")
         email = decoded.get("email")
@@ -162,20 +162,20 @@ class PetRegisterService:
             except Exception as e:
                 self.db.rollback()
                 print(f"❌ 사용자 생성 실패: {e}")
-                return error_response(500, "PET_500_3", "사용자 생성 중 오류가 발생했습니다.", path)
+                return pet_error("PET_500_3", path)
 
         # Body 검증
         if not body.name:
-            return error_response(400, "PET_400_1", "반려동물 이름은 필수입니다.", path)
+            return pet_error("PET_400_1", path)
 
         if body.gender and body.gender not in ("M", "F", "Unknown"):
-            return error_response(400, "PET_400_2", "gender 값 오류.", path)
+            return pet_error("PET_400_2", path)
 
         if not re.fullmatch(r"[A-Za-z0-9]{8}", body.pet_search_id):
-            return error_response(400, "PET_400_5", "pet_search_id는 영문+숫자 8자리여야 함.", path)
+            return pet_error("PET_400_5", path)
 
         if self.pet_repo.exists_pet_search_id(body.pet_search_id):
-            return error_response(409, "PET_409_1", "이미 사용 중인 pet_search_id입니다.", path)
+            return pet_error("PET_409_1", path)
 
         # 트랜잭션
         try:
@@ -238,9 +238,9 @@ class PetRegisterService:
             self.db.rollback()
 
             if "RECOMMENDATION_ERROR" in str(e):
-                return error_response(500, "PET_500_2", "추천 산책 정보를 생성하는 중 오류.", path)
+                return pet_error("PET_500_2", path)
 
-            return error_response(500, "PET_500_1", "반려동물 등록 중 오류.", path)
+            return pet_error("PET_500_1", path)
 
         # 성공 응답
         resp = {

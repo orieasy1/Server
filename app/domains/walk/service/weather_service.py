@@ -7,7 +7,7 @@ import httpx
 import os
 
 from app.core.firebase import verify_firebase_token
-from app.core.error_handler import error_response
+from app.domains.walk.exception import walk_error
 from app.domains.walk.repository.weather_repository import WeatherRepository
 
 
@@ -135,11 +135,7 @@ class WeatherService:
         # ============================================
         # 2-1) lat/lng 필수 체크
         if lat is None or lng is None:
-            return error_response(
-                400, "WEATHER_400_1",
-                "lat와 lng 쿼리 파라미터는 필수입니다.",
-                path
-            )
+            return walk_error("WEATHER_400_1", path)
 
         # 2-2) 위도/경도 범위 체크
         try:
@@ -147,17 +143,9 @@ class WeatherService:
             longitude = float(lng)
             
             if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
-                return error_response(
-                    400, "WEATHER_400_2",
-                    "위도(lat)는 -90~90, 경도(lng)는 -180~180 범위여야 합니다.",
-                    path
-                )
+                return walk_error("WEATHER_400_2", path)
         except (ValueError, TypeError):
-            return error_response(
-                400, "WEATHER_400_2",
-                "위도(lat)는 -90~90, 경도(lng)는 -180~180 범위여야 합니다.",
-                path
-            )
+            return walk_error("WEATHER_400_2", path)
 
         # ============================================
         # 3) 캐시 확인
@@ -212,23 +200,11 @@ class WeatherService:
 
             # 캐시도 없고 API 호출도 실패한 경우
             if "EXTERNAL_API_5XX" in error_msg:
-                return error_response(
-                    502, "WEATHER_502_1",
-                    "외부 날씨 서비스 응답에 문제가 발생했습니다. 잠시 후 다시 시도해주세요.",
-                    path
-                )
+                return walk_error("WEATHER_502_1", path)
             elif "EXTERNAL_API_TIMEOUT" in error_msg:
-                return error_response(
-                    503, "WEATHER_503_1",
-                    "현재 날씨 서비스를 이용할 수 없습니다. 잠시 후 다시 시도해주세요.",
-                    path
-                )
+                return walk_error("WEATHER_503_1", path)
             else:
-                return error_response(
-                    503, "WEATHER_503_1",
-                    "현재 날씨 서비스를 이용할 수 없습니다. 잠시 후 다시 시도해주세요.",
-                    path
-                )
+                return walk_error("WEATHER_503_1", path)
 
         # ============================================
         # 5) 응답 생성

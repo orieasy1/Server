@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.firebase import verify_firebase_token
 from app.core.error_handler import error_response
+from sqlalchemy.exc import IntegrityError
 
 from app.models.user import User
 from app.models.notification_reads import NotificationRead
@@ -62,8 +63,10 @@ class NotificationService:
 
             
             if notif.target_user_id is not None:
-                unread_count = 0
-                read_count = 1
+                # 개인 알림: 총 인원수는 1로 가정하고 실제 읽음 수를 기반으로 계산
+                base_count = 1
+                read_count = self.repo.get_read_count(notif.notification_id)
+                unread_count = max(0, base_count - read_count)
             else:
                 # ❗ family 전체 인원수
                 family_count = self.repo.get_family_member_count(notif.family_id)
@@ -91,8 +94,8 @@ class NotificationService:
             # --------------------------------------
             # 읽음처리 (안읽었으면 기록)
             # --------------------------------------
-            if notif.target_user_id is None:
-                if not is_read:
+            if not is_read:
+                try:
                     read_obj = NotificationRead(
                         notification_id=notif.notification_id,
                         user_id=user.user_id,
@@ -101,11 +104,25 @@ class NotificationService:
                     self.db.add(read_obj)
                     self.db.commit()
                     is_read = True
+                except IntegrityError:
+                    # 이미 다른 요청에서 읽음 처리된 경우: 롤백 후 그대로 계속
+                    self.db.rollback()
+                    is_read = True
+                except Exception as e:
+                    self.db.rollback()
+                    print(f"[NOTIF] mark read commit error: {e}")
 
-                    # readable 상태 업데이트
-                    read_count += 1
-                    unread_count -= 1
-                    display_read_text = f"{read_count}명 읽음"
+                # 읽음 여부를 반영해 최신 카운트를 DB 기준으로 다시 계산
+                if notif.target_user_id is not None:
+                    base_count = 1
+                    read_count = self.repo.get_read_count(notif.notification_id)
+                    unread_count = max(0, base_count - read_count)
+                else:
+                    family_count = self.repo.get_family_member_count(notif.family_id)
+                    read_count = self.repo.get_read_count(notif.notification_id)
+                    unread_count = family_count - read_count
+
+                display_read_text = f"{read_count}명 읽음"
 
             # --------------------------------------
             # 응답에 넣기 — 전 필드 포함

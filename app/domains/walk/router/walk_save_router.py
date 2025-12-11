@@ -5,8 +5,8 @@ from pydantic import BaseModel, Field
 
 from app.db import get_db
 from app.domains.walk.service.walk_save_service import WalkSaveService
-from app.schemas.error_schema import ErrorResponse
 from app.schemas.walk.walk_save_schema import WalkSaveRequest, WalkSaveResponse
+from app.domains.walk.exception import SAVE_RESPONSES, NOTIFY_RESPONSES
 
 
 # 산책 시작 알림 요청 스키마
@@ -26,13 +26,7 @@ router = APIRouter(
     description="산책 기록을 저장합니다. 저장된 기록은 Record/Activity 페이지에서 조회할 수 있습니다.",
     status_code=200,
     response_model=WalkSaveResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "잘못된 요청 (필수 필드 누락, 날짜 형식 오류 등)"},
-        401: {"model": ErrorResponse, "description": "인증 실패"},
-        403: {"model": ErrorResponse, "description": "권한 없음"},
-        404: {"model": ErrorResponse, "description": "반려동물을 찾을 수 없음"},
-        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
-    },
+    responses=SAVE_RESPONSES,
 )
 def save_walk(
     request: Request,
@@ -61,12 +55,7 @@ def save_walk(
     summary="산책 시작 알림 전송",
     description="산책 시작 시 가족 멤버들에게 알림을 전송합니다.",
     status_code=200,
-    responses={
-        401: {"model": ErrorResponse, "description": "인증 실패"},
-        403: {"model": ErrorResponse, "description": "권한 없음"},
-        404: {"model": ErrorResponse, "description": "반려동물을 찾을 수 없음"},
-        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
-    },
+    responses=NOTIFY_RESPONSES,
 )
 def notify_walk_start(
     request: Request,

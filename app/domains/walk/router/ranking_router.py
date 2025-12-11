@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.domains.walk.service.ranking_service import RankingService
 from app.schemas.walk.walk_ranking_schema import WalkRankingResponse
-from app.schemas.error_schema import ErrorResponse
+from app.domains.walk.exception import RANKING_RESPONSES
 
 router = APIRouter(prefix="/api/v1/walk", tags=["Walk"])
 
@@ -15,13 +15,7 @@ router = APIRouter(prefix="/api/v1/walk", tags=["Walk"])
     "/ranking",
     summary="가족 산책 랭킹 조회",
     response_model=WalkRankingResponse,
-    responses={
-        400: {"model": ErrorResponse},
-        401: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
-    }
+    responses=RANKING_RESPONSES
 )
 def get_ranking(
     request: Request,

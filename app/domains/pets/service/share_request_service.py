@@ -18,6 +18,7 @@ from app.domains.pets.repository.pet_repository import PetRepository
 from app.domains.pets.repository.family_repository import FamilyRepository
 from app.domains.pets.repository.pet_share_repository import PetShareRepository
 from app.domains.auth.repository.auth_repository import AuthRepository
+from app.domains.users.repository.user_repository import UserRepository
 
 
 class PetShareRequestService:
@@ -26,6 +27,7 @@ class PetShareRequestService:
         self.pet_repo = PetRepository(db)
         self.share_repo = PetShareRepository(db)
         self.family_repo = FamilyRepository(db)
+        self.user_repo = UserRepository(db)
 
     # ---------------------------------------------------------
     # 1) 공유 요청 생성
@@ -110,7 +112,7 @@ class PetShareRequestService:
 
         # 7️⃣ Owner + 기존 Family Member 에게 알림 생성 + FCM 푸시 발송
         family_members = self.family_repo.get_members(pet.family_id)
-        fcm_tokens = []  # FCM 푸시 대상 토큰 수집
+        target_user_ids = []
         
         for m in family_members:
             self._create_notification(
@@ -123,11 +125,9 @@ class PetShareRequestService:
                 user_id=user.user_id,
                 request_id=req.request_id,
             )
-            # FCM 토큰 수집
-            target_user = self.db.get(User, m.user_id)
-            if target_user and target_user.fcm_token:
-                fcm_tokens.append(target_user.fcm_token)
+            target_user_ids.append(m.user_id)
         
+        fcm_tokens = self.user_repo.get_active_fcm_tokens_for_users(target_user_ids)
         # 8️⃣ FCM 푸시 알림 발송
         if fcm_tokens:
             self._send_fcm_push(
@@ -260,7 +260,7 @@ class PetShareRequestService:
             else f"{pet.name} 공유 요청이 거절되었습니다."
         )
 
-        fcm_tokens = []  # FCM 푸시 대상 토큰 수집
+        target_user_ids = []
         
         for m in family_members:
             self._create_notification(
@@ -273,15 +273,26 @@ class PetShareRequestService:
                 user_id=user.user_id,
                 request_id=req.request_id,
             )
-            # FCM 토큰 수집
-            target_user = self.db.get(User, m.user_id)
-            if target_user and target_user.fcm_token:
-                fcm_tokens.append(target_user.fcm_token)
+            target_user_ids.append(m.user_id)
+
+        # 거절 시, 가족 목록에 없는 요청자에게도 개인 알림 생성
+        if new_status == RequestStatus.REJECTED and req.requester_id not in target_user_ids:
+            self._create_notification(
+                family_id=pet.family_id,
+                target_user_id=req.requester_id,
+                type=NotificationType.INVITE_REJECTED,
+                title=notif_title,
+                message=notif_msg,
+                pet_id=pet.pet_id,
+                user_id=user.user_id,
+                request_id=req.request_id,
+            )
+            target_user_ids.append(req.requester_id)
 
         # 9️⃣ 신청자에게도 FCM 푸시 알림 발송
-        requester = self.db.get(User, req.requester_id)
-        if requester and requester.fcm_token:
-            fcm_tokens.append(requester.fcm_token)
+        target_user_ids.append(req.requester_id)
+
+        fcm_tokens = self.user_repo.get_active_fcm_tokens_for_users(target_user_ids)
 
         # 🔟 FCM 푸시 알림 발송
         if fcm_tokens:
@@ -370,6 +381,8 @@ class PetShareRequestService:
                 data=data,
             )
             print(f"[FCM] Push sent: success={result['success_count']}, failure={result['failure_count']}")
+            if result.get("invalid_tokens"):
+                self.user_repo.remove_fcm_tokens(result["invalid_tokens"])
         except Exception as e:
             print(f"[FCM] Push error: {e}")
 

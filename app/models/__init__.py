@@ -13,3 +13,4 @@ from .notification import Notification
 from .notification_reads import NotificationRead 
 from .pet_walk_recommendation import PetWalkRecommendation
 from .pet_walk_goal import PetWalkGoal
+from .user_fcm_token import UserFcmToken

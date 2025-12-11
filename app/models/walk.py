@@ -7,7 +7,11 @@ class Walk(Base):
 
     walk_id = Column(Integer, primary_key=True, autoincrement=True)
     pet_id = Column(Integer, ForeignKey("pets.pet_id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.user_id", ondelete="SET NULL"),
+        nullable=True,  # 사용자 삭제 시 기록 보존을 위해 NULL 허용
+    )
 
     start_time = Column(DateTime, nullable=False)
     end_time = Column(DateTime)

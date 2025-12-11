@@ -4,8 +4,12 @@ from typing import Optional
 
 from app.db import get_db
 from app.domains.walk.service.session_service import SessionService
-from app.schemas.error_schema import ErrorResponse
 from app.schemas.walk.session_schema import WalkStartRequest, WalkStartResponse, WalkTrackRequest, WalkTrackResponse, WalkEndRequest, WalkEndResponse
+from app.domains.walk.exception import (
+    SESSION_START_RESPONSES,
+    SESSION_TRACK_RESPONSES,
+    SESSION_END_RESPONSES,
+)
 
 
 router = APIRouter(
@@ -20,14 +24,7 @@ router = APIRouter(
     description="새로운 산책 세션을 시작합니다. 진행 중인 산책이 있으면 시작할 수 없습니다.",
     status_code=201,
     response_model=WalkStartResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "잘못된 요청 (GPS 좌표 형식 오류 등)"},
-        401: {"model": ErrorResponse, "description": "인증 실패"},
-        403: {"model": ErrorResponse, "description": "권한 없음"},
-        404: {"model": ErrorResponse, "description": "반려동물을 찾을 수 없음"},
-        409: {"model": ErrorResponse, "description": "이미 진행 중인 산책이 있음"},
-        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
-    },
+    responses=SESSION_START_RESPONSES,
 )
 def start_walk(
     request: Request,
@@ -58,14 +55,7 @@ def start_walk(
     description="산책 중 실시간 위치 정보를 기록합니다. 종료된 산책에는 기록할 수 없습니다.",
     status_code=201,
     response_model=WalkTrackResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "잘못된 요청 (위도/경도 범위 초과 등)"},
-        401: {"model": ErrorResponse, "description": "인증 실패"},
-        403: {"model": ErrorResponse, "description": "권한 없음"},
-        404: {"model": ErrorResponse, "description": "산책을 찾을 수 없음"},
-        409: {"model": ErrorResponse, "description": "이미 종료된 산책"},
-        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
-    },
+    responses=SESSION_TRACK_RESPONSES,
 )
 def track_walk(
     request: Request,
@@ -98,14 +88,7 @@ def track_walk(
     description="산책 세션을 종료하고 최종 통계를 기록합니다. 활동 통계가 자동으로 업데이트됩니다.",
     status_code=200,
     response_model=WalkEndResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "잘못된 요청"},
-        401: {"model": ErrorResponse, "description": "인증 실패"},
-        403: {"model": ErrorResponse, "description": "권한 없음"},
-        404: {"model": ErrorResponse, "description": "산책을 찾을 수 없음"},
-        409: {"model": ErrorResponse, "description": "이미 종료된 산책"},
-        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
-    },
+    responses=SESSION_END_RESPONSES,
 )
 def end_walk(
     request: Request,

@@ -7,13 +7,14 @@ from datetime import datetime, date
 import pytz
 
 from app.core.firebase import verify_firebase_token, send_push_notification_to_multiple
-from app.core.error_handler import error_response
+from app.domains.walk.exception import walk_error
 from app.models.user import User
 from app.models.pet import Pet
 from app.models.family_member import FamilyMember
 from app.models.notification import NotificationType
 from app.domains.walk.repository.session_repository import SessionRepository
 from app.domains.notifications.repository.notification_repository import NotificationRepository
+from app.domains.users.repository.user_repository import UserRepository
 from app.schemas.walk.session_schema import WalkStartRequest, WalkTrackRequest, WalkEndRequest
 
 
@@ -22,6 +23,7 @@ class SessionService:
         self.db = db
         self.session_repo = SessionRepository(db)
         self.notification_repo = NotificationRepository(db)
+        self.user_repo = UserRepository(db)
 
     def _send_walk_fcm_push(
         self,
@@ -47,23 +49,13 @@ class SessionService:
             
             print(f"[FCM DEBUG] Family members count: {len(family_members)}")
 
-            # FCM 토큰 수집 (본인 제외)
-            fcm_tokens = []
-            for m in family_members:
-                print(f"[FCM DEBUG] Member user_id={m.user_id}, exclude_user_id={exclude_user_id}")
-                if m.user_id == exclude_user_id:
-                    print(f"[FCM DEBUG] Skipping user {m.user_id} (self)")
-                    continue  # 본인 제외
-                
-                target_user = self.db.get(User, m.user_id)
-                if target_user:
-                    print(f"[FCM DEBUG] User {m.user_id} fcm_token: {target_user.fcm_token[:20] if target_user.fcm_token else 'None'}...")
-                    if target_user.fcm_token:
-                        fcm_tokens.append(target_user.fcm_token)
-                else:
-                    print(f"[FCM DEBUG] User {m.user_id} not found")
-
-            print(f"[FCM DEBUG] Collected FCM tokens: {len(fcm_tokens)}")
+            target_user_ids = [
+                m.user_id for m in family_members if m.user_id != exclude_user_id
+            ]
+            fcm_tokens = self.user_repo.get_active_fcm_tokens_for_users(target_user_ids)
+            print(f"[FCM DEBUG] Target user IDs: {target_user_ids}")
+            token_previews = [t[:15] + "..." if t and len(t) > 15 else t for t in fcm_tokens]
+            print(f"[FCM DEBUG] Collected FCM tokens: {len(fcm_tokens)} ({token_previews})")
 
             # FCM 푸시 발송
             if fcm_tokens:
@@ -74,6 +66,8 @@ class SessionService:
                     data=data,
                 )
                 print(f"[FCM] Walk push sent: success={result['success_count']}, failure={result['failure_count']}")
+                if result.get("invalid_tokens"):
+                    self.user_repo.remove_fcm_tokens(result["invalid_tokens"])
             else:
                 print("[FCM] No FCM tokens to send walk notification")
 
@@ -94,34 +88,20 @@ class SessionService:
         # 1) Authorization 검증
         # ============================================
         if authorization is None:
-            return error_response(
-                401, "WALK_START_401_1", "Authorization 헤더가 필요합니다.", path
-            )
+            return walk_error("WALK_START_401_1", path)
 
         if not authorization.startswith("Bearer "):
-            return error_response(
-                401, "WALK_START_401_2",
-                "Authorization 헤더는 'Bearer <token>' 형식이어야 합니다.",
-                path
-            )
+            return walk_error("WALK_START_401_2", path)
 
         parts = authorization.split(" ")
         if len(parts) != 2:
-            return error_response(
-                401, "WALK_START_401_2",
-                "Authorization 헤더 형식이 잘못되었습니다.",
-                path
-            )
+            return walk_error("WALK_START_401_2", path)
 
         id_token = parts[1]
         decoded = verify_firebase_token(id_token)
 
         if decoded is None:
-            return error_response(
-                401, "WALK_START_401_2",
-                "유효하지 않거나 만료된 Firebase ID Token입니다. 다시 로그인해주세요.",
-                path
-            )
+            return walk_error("WALK_START_401_2", path)
 
         firebase_uid = decoded.get("uid")
 
@@ -135,33 +115,21 @@ class SessionService:
         )
 
         if not user:
-            return error_response(
-                404, "WALK_START_404_1",
-                "해당 사용자를 찾을 수 없습니다.",
-                path
-            )
+            return walk_error("WALK_START_404_1", path)
 
         # ============================================
         # 3) Body 유효성 검사
         # ============================================
         # 3-1) pet_id 필수 체크
         if body.pet_id is None:
-            return error_response(
-                400, "WALK_START_400_1",
-                "pet_id는 필수 값입니다.",
-                path
-            )
+            return walk_error("WALK_START_400_1", path)
 
         # 3-2) start_lat / start_lng 짝 맞춤 체크
         has_lat = body.start_lat is not None
         has_lng = body.start_lng is not None
         
         if has_lat != has_lng:
-            return error_response(
-                400, "WALK_START_400_2",
-                "start_lat와 start_lng는 함께 보내야 합니다.",
-                path
-            )
+            return walk_error("WALK_START_400_2", path)
 
         # ============================================
         # 4) 반려동물 조회
@@ -173,11 +141,7 @@ class SessionService:
         )
 
         if not pet:
-            return error_response(
-                404, "WALK_START_404_2",
-                "요청하신 반려동물을 찾을 수 없습니다.",
-                path
-            )
+            return walk_error("WALK_START_404_2", path)
 
         # ============================================
         # 5) 권한 체크 (family_members 확인)
@@ -192,11 +156,7 @@ class SessionService:
         )
 
         if not family_member:
-            return error_response(
-                403, "WALK_START_403_1",
-                "해당 반려동물의 산책을 시작할 권한이 없습니다.",
-                path
-            )
+            return walk_error("WALK_START_403_1", path)
 
         # ============================================
         # 6) 진행 중인 산책 체크
@@ -205,18 +165,10 @@ class SessionService:
             ongoing_walk = self.session_repo.get_ongoing_walk_by_pet_id(body.pet_id)
             
             if ongoing_walk:
-                return error_response(
-                    409, "WALK_START_409_1",
-                    "이미 진행 중인 산책이 있습니다. 기존 산책을 종료한 후 다시 시도해주세요.",
-                    path
-                )
+                return walk_error("WALK_START_409_1", path)
         except Exception as e:
             print("ONGOING_WALK_CHECK_ERROR:", e)
-            return error_response(
-                500, "WALK_START_500_1",
-                "산책을 시작하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
-                path
-            )
+            return walk_error("WALK_START_500_1", path)
 
         # ============================================
         # 7) 산책 세션 생성
@@ -247,11 +199,7 @@ class SessionService:
         except Exception as e:
             print("WALK_CREATE_ERROR:", e)
             self.db.rollback()
-            return error_response(
-                500, "WALK_START_500_1",
-                "산책을 시작하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
-                path
-            )
+            return walk_error("WALK_START_500_1", path)
 
         # ============================================
         # 7-1) 산책 시작 알림 생성 (FAMILY 기준 1개) + FCM 푸시

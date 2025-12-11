@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.core.firebase import verify_firebase_token
-from app.core.error_handler import error_response
+from app.domains.users.exception import user_error
 from app.domains.users.repository.user_repository import UserRepository
 from app.domains.auth.repository.auth_repository import AuthRepository
 
@@ -22,21 +22,21 @@ class UserService:
 
         # 1) Authorization 헤더 확인
         if authorization is None:
-            return error_response(401, "USER_GET_401_1", "Authorization 헤더가 필요합니다.", path)
+            return user_error("USER_GET_401_1", path)
 
         if not authorization.startswith("Bearer "):
-            return error_response(401, "USER_GET_401_2", "Authorization 헤더는 'Bearer <token>' 형식이어야 합니다.", path)
+            return user_error("USER_GET_401_2", path)
 
         parts = authorization.split(" ")
         if len(parts) != 2:
-            return error_response(401, "USER_GET_401_3", "Authorization 헤더 형식이 잘못되었습니다.", path)
+            return user_error("USER_GET_401_3", path)
 
         id_token = parts[1]
 
         # 2) Firebase Token 검증
         decoded = verify_firebase_token(id_token)
         if decoded is None:
-            return error_response(401, "USER_GET_401_4", "유효하지 않거나 만료된 Firebase ID Token입니다.", path)
+            return user_error("USER_GET_401_4", path)
 
         firebase_uid = decoded.get("uid")
 
@@ -70,7 +70,7 @@ class UserService:
             except Exception as e:
                 print("USER_GET_CREATE_ERROR:", e)
                 db.rollback()
-                return error_response(500, "USER_GET_500_2", "사용자 정보를 생성하는 중 오류가 발생했습니다.", path)
+                return user_error("USER_GET_500_2", path)
 
         # 4) Pydantic 스키마 변환
         user_schema = UserBase(
@@ -103,21 +103,21 @@ class UserService:
 
         # 1) Authorization 헤더 확인
         if authorization is None:
-            return error_response(401, "USER_EDIT_401_1", "Authorization 헤더가 필요합니다.", path)
+            return user_error("USER_EDIT_401_1", path)
 
         if not authorization.startswith("Bearer "):
-            return error_response(401, "USER_EDIT_401_2", "Authorization 헤더는 'Bearer <token>' 형식이어야 합니다.", path)
+            return user_error("USER_EDIT_401_2", path)
 
         parts = authorization.split(" ")
         if len(parts) != 2:
-            return error_response(401, "USER_EDIT_401_3", "Authorization 헤더 형식이 잘못되었습니다.", path)
+            return user_error("USER_EDIT_401_3", path)
 
         id_token = parts[1]
 
         # 2) Firebase 검증
         decoded = verify_firebase_token(id_token)
         if decoded is None:
-            return error_response(401, "USER_EDIT_401_4", "유효하지 않거나 만료된 Firebase ID Token입니다.", path)
+            return user_error("USER_EDIT_401_4", path)
 
         firebase_uid = decoded.get("uid")
 
@@ -151,16 +151,16 @@ class UserService:
             except Exception as e:
                 print("USER_EDIT_CREATE_ERROR:", e)
                 db.rollback()
-                return error_response(500, "USER_EDIT_500_2", "사용자 정보를 생성하는 중 오류가 발생했습니다.", path)
+                return user_error("USER_EDIT_500_2", path)
 
         # 4) Body 검증
         if not body or (body.nickname is None and body.phone is None):
-            return error_response(400, "USER_EDIT_400_1", "수정할 필드가 존재하지 않습니다.", path)
+            return user_error("USER_EDIT_400_1", path)
 
         # 전화번호 형식 검증
         if body.phone is not None:
             if not re.match(r"^010-\d{4}-\d{4}$", body.phone):
-                return error_response(400, "USER_EDIT_400_3", "전화번호 형식이 올바르지 않습니다.", path)
+                return user_error("USER_EDIT_400_3", path)
 
         # 5) 수정 처리
         try:
@@ -172,7 +172,7 @@ class UserService:
         except Exception as e:
             print("USER_UPDATE_ERROR:", e)
             db.rollback()
-            return error_response(500, "USER_EDIT_500_1", "사용자 정보를 수정하는 중 오류가 발생했습니다.", path)
+            return user_error("USER_EDIT_500_1", path)
 
         # 6) 응답 스키마 변환
         updated_schema = UserBase(
@@ -199,27 +199,29 @@ class UserService:
         authorization: Optional[str],
         fcm_token: str,
         db: Session,
+        device_id: Optional[str] = None,
+        platform: Optional[str] = "android",
     ):
         """FCM 푸시 알림 토큰을 업데이트합니다."""
         path = request.url.path
 
         # 1) Authorization 헤더 확인
         if authorization is None:
-            return error_response(401, "FCM_401_1", "Authorization 헤더가 필요합니다.", path)
+            return user_error("FCM_401_1", path)
 
         if not authorization.startswith("Bearer "):
-            return error_response(401, "FCM_401_2", "Authorization 헤더는 'Bearer <token>' 형식이어야 합니다.", path)
+            return user_error("FCM_401_2", path)
 
         parts = authorization.split(" ")
         if len(parts) != 2:
-            return error_response(401, "FCM_401_3", "Authorization 헤더 형식이 잘못되었습니다.", path)
+            return user_error("FCM_401_3", path)
 
         id_token = parts[1]
 
         # 2) Firebase 검증
         decoded = verify_firebase_token(id_token)
         if decoded is None:
-            return error_response(401, "FCM_401_4", "유효하지 않거나 만료된 Firebase ID Token입니다.", path)
+            return user_error("FCM_401_4", path)
 
         firebase_uid = decoded.get("uid")
 
@@ -253,18 +255,23 @@ class UserService:
             except Exception as e:
                 print("FCM_CREATE_ERROR:", e)
                 db.rollback()
-                return error_response(500, "FCM_500_2", "사용자 정보를 생성하는 중 오류가 발생했습니다.", path)
+                return user_error("FCM_500_2", path)
 
         # 4) FCM 토큰 업데이트
         try:
-            user.fcm_token = fcm_token
+            repo.upsert_fcm_token(
+                user=user,
+                fcm_token=fcm_token,
+                device_id=device_id,
+                platform=platform or "android",
+            )
             db.commit()
             db.refresh(user)
             print(f"[INFO] FCM token updated for user {user.user_id}: {fcm_token[:20]}...")
         except Exception as e:
             print(f"[ERROR] FCM token update failed: {e}")
             db.rollback()
-            return error_response(500, "FCM_500_1", "FCM 토큰 업데이트 중 오류가 발생했습니다.", path)
+            return user_error("FCM_500_1", path)
 
         return {
             "success": True,

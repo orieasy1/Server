@@ -4,8 +4,8 @@ from typing import Optional
 
 from app.db import get_db
 from app.domains.walk.service.photo_service import PhotoService
-from app.schemas.error_schema import ErrorResponse
 from app.schemas.walk.photo_schema import PhotoUploadResponse
+from app.domains.walk.exception import PHOTO_UPLOAD_RESPONSES
 
 
 router = APIRouter(
@@ -20,14 +20,7 @@ router = APIRouter(
     description="산책 종료 후 인증 사진을 업로드합니다. 종료된 산책에만 업로드 가능합니다.",
     status_code=201,
     response_model=PhotoUploadResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "잘못된 요청 (파일 형식/크기 오류 등)"},
-        401: {"model": ErrorResponse, "description": "인증 실패"},
-        403: {"model": ErrorResponse, "description": "권한 없음"},
-        404: {"model": ErrorResponse, "description": "산책을 찾을 수 없음"},
-        409: {"model": ErrorResponse, "description": "진행 중인 산책에는 업로드 불가"},
-        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
-    },
+    responses=PHOTO_UPLOAD_RESPONSES,
 )
 def upload_walk_photo(
     request: Request,

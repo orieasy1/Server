@@ -7,7 +7,7 @@ from datetime import datetime
 import os
 
 from app.core.firebase import verify_firebase_token, upload_file_to_storage
-from app.core.error_handler import error_response
+from app.domains.walk.exception import walk_error
 from app.models.user import User
 from app.models.pet import Pet
 from app.models.family_member import FamilyMember
@@ -40,34 +40,20 @@ class PhotoService:
         # 1) Authorization 검증
         # ============================================
         if authorization is None:
-            return error_response(
-                401, "WALK_PHOTO_401_1", "Authorization 헤더가 필요합니다.", path
-            )
+            return walk_error("WALK_PHOTO_401_1", path)
 
         if not authorization.startswith("Bearer "):
-            return error_response(
-                401, "WALK_PHOTO_401_2",
-                "Authorization 헤더는 'Bearer <token>' 형식이어야 합니다.",
-                path
-            )
+            return walk_error("WALK_PHOTO_401_2", path)
 
         parts = authorization.split(" ")
         if len(parts) != 2:
-            return error_response(
-                401, "WALK_PHOTO_401_2",
-                "Authorization 헤더 형식이 잘못되었습니다.",
-                path
-            )
+            return walk_error("WALK_PHOTO_401_2", path)
 
         id_token = parts[1]
         decoded = verify_firebase_token(id_token)
 
         if decoded is None:
-            return error_response(
-                401, "WALK_PHOTO_401_2",
-                "유효하지 않거나 만료된 Firebase ID Token입니다. 다시 로그인해주세요.",
-                path
-            )
+            return walk_error("WALK_PHOTO_401_2", path)
 
         firebase_uid = decoded.get("uid")
 
@@ -81,33 +67,21 @@ class PhotoService:
         )
 
         if not user:
-            return error_response(
-                404, "WALK_PHOTO_404_1",
-                "해당 사용자를 찾을 수 없습니다.",
-                path
-            )
+            return walk_error("WALK_PHOTO_404_1", path)
 
         # ============================================
         # 3) 파일 유효성 검사
         # ============================================
         # 3-1) 파일 존재 체크
         if not file or not file.filename:
-            return error_response(
-                400, "WALK_PHOTO_400_1",
-                "업로드할 이미지 파일이 필요합니다.",
-                path
-            )
+            return walk_error("WALK_PHOTO_400_1", path)
 
         # 3-2) 파일 확장자 체크
         file_extension = None
         if file.filename:
             file_extension = os.path.splitext(file.filename.lower())[1]
             if file_extension not in ALLOWED_EXTENSIONS:
-                return error_response(
-                    400, "WALK_PHOTO_400_2",
-                    "지원하지 않는 이미지 형식입니다. JPG 또는 PNG 파일을 업로드해주세요.",
-                    path
-                )
+                return walk_error("WALK_PHOTO_400_2", path)
 
         # 3-3) 파일 크기 체크
         try:
@@ -115,25 +89,13 @@ class PhotoService:
             file_size = len(file_content)
             
             if file_size > MAX_FILE_SIZE:
-                return error_response(
-                    400, "WALK_PHOTO_400_3",
-                    "이미지 파일 크기가 허용 범위를 초과했습니다.",
-                    path
-                )
+                return walk_error("WALK_PHOTO_400_3", path)
             
             if file_size == 0:
-                return error_response(
-                    400, "WALK_PHOTO_400_1",
-                    "업로드할 이미지 파일이 필요합니다.",
-                    path
-                )
+                return walk_error("WALK_PHOTO_400_1", path)
         except Exception as e:
             print("FILE_READ_ERROR:", e)
-            return error_response(
-                400, "WALK_PHOTO_400_1",
-                "업로드할 이미지 파일이 필요합니다.",
-                path
-            )
+            return walk_error("WALK_PHOTO_400_1", path)
 
         # ============================================
         # 4) 산책 세션 조회
@@ -142,28 +104,16 @@ class PhotoService:
             walk = self.session_repo.get_walk_by_walk_id(walk_id)
             
             if not walk:
-                return error_response(
-                    404, "WALK_PHOTO_404_2",
-                    "요청하신 산책 세션을 찾을 수 없습니다.",
-                    path
-                )
+                return walk_error("WALK_PHOTO_404_2", path)
         except Exception as e:
             print("WALK_QUERY_ERROR:", e)
-            return error_response(
-                500, "WALK_PHOTO_500_2",
-                "산책 사진 기록을 저장하는 중 오류가 발생했습니다.",
-                path
-            )
+            return walk_error("WALK_PHOTO_500_2", path)
 
         # ============================================
         # 5) 산책 종료 여부 체크
         # ============================================
         if walk.end_time is None:
-            return error_response(
-                409, "WALK_PHOTO_409_1",
-                "종료되지 않은 산책에는 인증 사진을 업로드할 수 없습니다.",
-                path
-            )
+            return walk_error("WALK_PHOTO_409_1", path)
 
         # ============================================
         # 6) 권한 체크 (family_members 확인)
@@ -175,11 +125,7 @@ class PhotoService:
         )
 
         if not pet:
-            return error_response(
-                404, "WALK_PHOTO_404_2",
-                "요청하신 산책 세션을 찾을 수 없습니다.",
-                path
-            )
+            return walk_error("WALK_PHOTO_404_2", path)
 
         family_member: FamilyMember = (
             self.db.query(FamilyMember)
@@ -191,11 +137,7 @@ class PhotoService:
         )
 
         if not family_member:
-            return error_response(
-                403, "WALK_PHOTO_403_1",
-                "해당 산책에 사진을 업로드할 권한이 없습니다.",
-                path
-            )
+            return walk_error("WALK_PHOTO_403_1", path)
 
         # ============================================
         # 7) 사진 촬영 시간 검증 (선택)
@@ -209,11 +151,7 @@ class PhotoService:
                 # UTC로 변환하여 비교
                 if walk_start and walk_end:
                     if photo_time < walk_start or photo_time > walk_end:
-                        return error_response(
-                            400, "WALK_PHOTO_400_4",
-                            "사진 촬영 시간이 산책 시간과 맞지 않습니다. 산책 중에 촬영한 사진만 업로드해주세요.",
-                            path
-                        )
+                        return walk_error("WALK_PHOTO_400_4", path)
             except (ValueError, AttributeError):
                 # timestamp 파싱 실패는 무시 (선택 필드이므로)
                 pass
@@ -237,11 +175,7 @@ class PhotoService:
             )
         except Exception as e:
             print("STORAGE_UPLOAD_ERROR:", e)
-            return error_response(
-                500, "WALK_PHOTO_500_1",
-                "이미지 업로드 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
-                path
-            )
+            return walk_error("WALK_PHOTO_500_1", path)
 
         # ============================================
         # 9) DB에 사진 정보 저장
@@ -261,11 +195,7 @@ class PhotoService:
             print("PHOTO_SAVE_ERROR:", e)
             self.db.rollback()
             # Storage에 업로드된 파일은 나중에 정리 작업으로 삭제 가능
-            return error_response(
-                500, "WALK_PHOTO_500_2",
-                "산책 사진 기록을 저장하는 중 오류가 발생했습니다.",
-                path
-            )
+            return walk_error("WALK_PHOTO_500_2", path)
 
         # ============================================
         # 10) 응답 생성

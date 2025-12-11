@@ -5,7 +5,7 @@ from typing import Optional
 from app.db import get_db
 from app.domains.walk.service.recommendation_service import RecommendationService
 from app.domains.walk.service.walk_recommendation_service import WalkRecommendationService
-from app.schemas.error_schema import ErrorResponse
+from app.domains.walk.exception import RECOMMEND_RESPONSES
 from app.schemas.walk.recommendation_schema import RecommendationResponse
 from app.schemas.walk.walk_recommendation_request_schema import WalkRecommendationRequest
 
@@ -22,12 +22,7 @@ router = APIRouter(
     description="반려동물의 특성에 맞는 추천 산책 정보를 조회합니다.",
     status_code=200,
     response_model=RecommendationResponse,
-    responses={
-        401: {"model": ErrorResponse, "description": "인증 실패"},
-        403: {"model": ErrorResponse, "description": "권한 없음"},
-        404: {"model": ErrorResponse, "description": "반려동물을 찾을 수 없음"},
-        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
-    },
+    responses=RECOMMEND_RESPONSES,
 )
 def get_recommendation(
     request: Request,
@@ -55,13 +50,7 @@ def get_recommendation(
     description="펫 정보와 날씨를 바탕으로 OpenAI로 산책 추천 멘트를 생성합니다.",
     status_code=200,
     response_model=RecommendationResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "잘못된 요청"},
-        401: {"model": ErrorResponse, "description": "인증 실패"},
-        403: {"model": ErrorResponse, "description": "권한 없음"},
-        404: {"model": ErrorResponse, "description": "반려동물을 찾을 수 없음"},
-        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
-    },
+    responses=RECOMMEND_RESPONSES,
 )
 def create_walk_recommendation(
     request: Request,

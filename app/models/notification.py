@@ -12,12 +12,9 @@ class NotificationType(enum.Enum):
     FAMILY_ROLE_CHANGED = "FAMILY_ROLE_CHANGED"
     ACTIVITY_END = "ACTIVITY_END"
     PET_UPDATE = "PET_UPDATE"
-    SYSTEM_RANKING = "SYSTEM_RANKING"
     SYSTEM_WEATHER = "SYSTEM_WEATHER"
     SYSTEM_HEALTH = "SYSTEM_HEALTH"
     PET_MEMBER_LEFT = "PET_MEMBER_LEFT"
-    SOS = "SOS"
-    SOS_RESOLVED = "SOS_RESOLVED"
 
 
 class Notification(Base):
@@ -26,7 +23,11 @@ class Notification(Base):
     notification_id = Column(Integer, primary_key=True, autoincrement=True)
 
     family_id = Column(Integer, ForeignKey("families.family_id"))
-    target_user_id = Column(Integer, ForeignKey("users.user_id"))
+    target_user_id = Column(
+        Integer,
+        ForeignKey("users.user_id", ondelete="SET NULL"),
+        nullable=True,  # 사용자 삭제 시 기록 보존을 위해 NULL 허용
+    )
 
     type = Column(Enum(NotificationType), nullable=False)
     title = Column(String(100), nullable=False)
@@ -34,7 +35,11 @@ class Notification(Base):
 
     # 새로운 필드 ⭐
     related_pet_id = Column(Integer, ForeignKey("pets.pet_id"))
-    related_user_id = Column(Integer, ForeignKey("users.user_id"))
+    related_user_id = Column(
+        Integer,
+        ForeignKey("users.user_id", ondelete="SET NULL"),
+        nullable=True,  # 사용자 삭제 시 기록 보존을 위해 NULL 허용
+    )
 
     # 공유 요청 승인/거절을 위한 request_id ⭐
     related_request_id = Column(Integer, ForeignKey("pet_share_requests.request_id"), nullable=True)

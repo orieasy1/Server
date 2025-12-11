@@ -162,13 +162,17 @@ def send_push_notification_to_multiple(
         return {"success_count": 0, "failure_count": 0, "failed_tokens": []}
     
     try:
+        payload_data = {k: str(v) for k, v in (data or {}).items()}
+        if "type" not in payload_data:
+            payload_data["type"] = payload_data.get("type", "GENERIC")
+
         # MulticastMessage 구성
         message = messaging.MulticastMessage(
             notification=messaging.Notification(
                 title=title,
                 body=body,
             ),
-            data={k: str(v) for k, v in (data or {}).items()},
+            data=payload_data,
             tokens=valid_tokens,
             android=messaging.AndroidConfig(
                 priority="high",
@@ -186,9 +190,23 @@ def send_push_notification_to_multiple(
         
         # 실패한 토큰 수집
         failed_tokens = []
+        invalid_tokens = []
+        failure_details = []
         for idx, send_response in enumerate(response.responses):
             if not send_response.success:
                 failed_tokens.append(valid_tokens[idx])
+                error_obj = getattr(send_response, "exception", None)
+                error_code = getattr(error_obj, "code", None)
+                failure_details.append({
+                    "token": valid_tokens[idx],
+                    "code": error_code,
+                    "exception": type(error_obj).__name__ if error_obj else "UnknownError",
+                })
+                if isinstance(error_obj, messaging.UnregisteredError) or error_code in (
+                    "registration-token-not-registered",
+                    "invalid-argument",
+                ):
+                    invalid_tokens.append(valid_tokens[idx])
         
         print(f"[FCM] Multicast result: {response.success_count} success, {response.failure_count} failures")
         
@@ -196,6 +214,8 @@ def send_push_notification_to_multiple(
             "success_count": response.success_count,
             "failure_count": response.failure_count,
             "failed_tokens": failed_tokens,
+            "invalid_tokens": invalid_tokens,
+            "failure_details": failure_details,
         }
         
     except Exception as e:
@@ -204,4 +224,7 @@ def send_push_notification_to_multiple(
             "success_count": 0,
             "failure_count": len(valid_tokens),
             "failed_tokens": valid_tokens,
+            # Do NOT mark all tokens invalid on generic errors; keep them for retry.
+            "invalid_tokens": [],
+            "failure_details": [{"token": t, "code": "exception", "exception": type(e).__name__} for t in valid_tokens],
         }

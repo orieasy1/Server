@@ -6,6 +6,7 @@ from app.domains.auth.service.auth_service import AuthService
 from app.schemas.auth.auth_schema import LoginResponse
 from app.schemas.error_schema import ErrorResponse
 from fastapi import status
+from app.domains.auth.exception import AUTH_LOGIN_RESPONSES, AUTH_DELETE_RESPONSES
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
@@ -16,11 +17,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
     description="Firebase ID 토큰을 사용하여 사용자를 인증하고 로그인합니다. 신규 사용자는 자동으로 생성됩니다.",
     status_code=200,
     response_model=LoginResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "잘못된 요청 (토큰 형식 오류 등)"},
-        401: {"model": ErrorResponse, "description": "인증 실패 (유효하지 않은 토큰)"},
-        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
-    },
+    responses=AUTH_LOGIN_RESPONSES,
 )
 def login(
     request: Request,
@@ -43,13 +40,7 @@ def login(
     summary="회원 탈퇴",
     description="사용자가 속한 모든 family를 처리한 후 계정을 삭제합니다.",
     status_code=status.HTTP_200_OK,
-    responses={
-        200: {"description": "회원탈퇴가 정상적으로 처리되었습니다."},
-        401: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        500: {"model": ErrorResponse},
-    },
+    responses=AUTH_DELETE_RESPONSES,
 )
 def delete_account(
     request: Request,

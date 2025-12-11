@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from datetime import datetime, timedelta
 
 from app.core.firebase import verify_firebase_token
-from app.core.error_handler import error_response
+from app.domains.walk.exception import walk_error
 
 from app.models.user import User
 from app.models.family_member import FamilyMember
@@ -25,14 +25,14 @@ class RankingService:
         # 1) Authorization
         # -------------------------
         if authorization is None:
-            return error_response(401, "WALK_RANKING_401_1", "Authorization 헤더가 필요합니다.", path)
+            return walk_error("WALK_RANKING_401_1", path)
 
         if not authorization.startswith("Bearer "):
-            return error_response(401, "WALK_RANKING_401_2", "Authorization 형식이 잘못되었습니다.", path)
+            return walk_error("WALK_RANKING_401_2", path)
 
         decoded = verify_firebase_token(authorization.split(" ")[1])
         if decoded is None:
-            return error_response(401, "WALK_RANKING_401_2", "유효하지 않은 Firebase ID Token입니다.", path)
+            return walk_error("WALK_RANKING_401_2", path)
 
         # -------------------------
         # 2) 유저 조회
@@ -40,16 +40,16 @@ class RankingService:
         firebase_uid = decoded.get("uid")
         user = self.db.query(User).filter(User.firebase_uid == firebase_uid).first()
         if not user:
-            return error_response(401, "WALK_RANKING_401_3", "DB에 사용자 정보가 존재하지 않습니다.", path)
+            return walk_error("WALK_RANKING_401_3", path)
 
         # -------------------------
         # 3) family_id 유효성
         # -------------------------
         if family_id is None:
-            return error_response(400, "WALK_RANKING_400_2", "family_id는 필수 값입니다.", path)
+            return walk_error("WALK_RANKING_400_2", path)
 
         if not self.repo.check_family_exists(family_id):
-            return error_response(404, "WALK_RANKING_404_1", "해당 가족을 찾을 수 없습니다.", path)
+            return walk_error("WALK_RANKING_404_1", path)
 
         # -------------------------
         # 4) 요청자가 family 구성원인지 확인
@@ -61,7 +61,7 @@ class RankingService:
             .first()
         )
         if not member:
-            return error_response(403, "WALK_RANKING_403_1", "해당 가족 구성원이 아니므로 접근할 수 없습니다.", path)
+            return walk_error("WALK_RANKING_403_1", path)
 
         # -------------------------
         # 5) 기간 계산
@@ -87,7 +87,7 @@ class RankingService:
             end_dt = datetime(3000, 1, 1)
 
         else:
-            return error_response(400, "WALK_RANKING_400_1", "period는 weekly, monthly, total 중 하나여야 합니다.", path)
+            return walk_error("WALK_RANKING_400_1", path)
 
         # -------------------------
         # 6) family 구성원 user_id 리스트
@@ -101,12 +101,7 @@ class RankingService:
 
         # 🔥 추가된 부분 — 스펙 404-2 반영
         if not stats:
-            return error_response(
-                404,
-                "WALK_RANKING_404_2",
-                "이번 기간에는 산책 기록이 존재하지 않습니다.",
-                path,
-            )
+            return walk_error("WALK_RANKING_404_2", path)
 
         # -------------------------
         # 8) 랭킹 결과 생성

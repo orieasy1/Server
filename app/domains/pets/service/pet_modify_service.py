@@ -28,6 +28,7 @@ from app.models.activity_stat import ActivityStat
 
 from app.domains.pets.repository.pet_repository import PetRepository
 from app.domains.notifications.repository.notification_repository import NotificationRepository
+from app.domains.users.repository.user_repository import UserRepository
 from app.schemas.pets.pet_update_schema import PetUpdateRequest
 
 
@@ -36,6 +37,7 @@ class PetModifyService:
         self.db = db
         self.repo = PetRepository(db)
         self.notif_repo = NotificationRepository(db)
+        self.user_repo = UserRepository(db)
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
     # --------------------------------------------------
@@ -203,6 +205,19 @@ class PetModifyService:
         self.db.commit()
         self.db.refresh(updated_pet)
 
+        # ========== Notify family (PET_UPDATE) ==========
+        try:
+            self._broadcast_pet_update(
+                pet=updated_pet,
+                actor=user,
+                message=f"{updated_pet.name or '반려동물'} 정보가 수정되었습니다.",
+                exclude_user_id=user.user_id,
+            )
+            self.db.commit()
+        except Exception as e:
+            print(f"[NOTIF] PET_UPDATE notify error: {e}")
+            self.db.rollback()
+
         # ========== Response ==========
         resp = {
             "success": True,
@@ -294,6 +309,19 @@ class PetModifyService:
             self.db.rollback()
             return error_response(500, "PET_IMG_500_2", "이미지 URL 저장 중 오류.", path)
 
+        # 알림/푸시: 이미지 업데이트도 PET_UPDATE로 통합
+        try:
+            self._broadcast_pet_update(
+                pet=pet,
+                actor=user,
+                message=f"{pet.name or '반려동물'} 사진이 업데이트되었습니다.",
+                exclude_user_id=user.user_id,
+            )
+            self.db.commit()
+        except Exception as e:
+            print(f"[NOTIF] PET_UPDATE image notify error: {e}")
+            self.db.rollback()
+
         return JSONResponse(
             status_code=200,
             content=jsonable_encoder(
@@ -345,8 +373,15 @@ class PetModifyService:
             return error_response(404, "PET_DELETE_404_2", "반려동물을 찾을 수 없습니다.", path)
 
         is_owner = pet.owner_id == user.user_id
-        pet_name = pet.name
+        pet_name = pet.name or "반려동물"
+        actor_name = user.nickname or "가족 구성원"
         family_id = pet.family_id
+        # 가족 멤버 전체 (푸시/알림에 공통 사용)
+        family_members = (
+            self.db.query(FamilyMember)
+            .filter(FamilyMember.family_id == family_id)
+            .all()
+        )
 
         # 🔥 OWNER가 아니면 가족 구성원에서 본인만 제거
         if not is_owner:
@@ -363,15 +398,39 @@ class PetModifyService:
                 return error_response(404, "PET_DELETE_404_3", "가족 구성원 정보를 찾을 수 없습니다.", path)
 
             # 가족에게 알림: 구성원이 펫 가족에서 나감
+            leave_title = "가족 구성원 변경"
+            leave_msg = f"{actor_name}님이 {pet_name} 가족에서 나갔습니다."
+
             self.notif_repo.create_notification(
                 family_id=family_id,
                 target_user_id=None,
-                related_pet_id=None,  # FK 충돌 방지
+                related_pet_id=pet_id,
                 related_user_id=user.user_id,
                 notif_type=NotificationType.PET_MEMBER_LEFT,
-                title="가족 구성원 변경",
-                message=f"{user.nickname}님이 {pet_name} 가족에서 나갔습니다.",
+                title=leave_title,
+                message=leave_msg,
             )
+
+            # 푸시 알림 (가족 전원)
+            member_ids = [m.user_id for m in family_members if m.user_id != user.user_id]
+            fcm_tokens = self.user_repo.get_active_fcm_tokens_for_users(member_ids)
+            if fcm_tokens:
+                try:
+                    result = send_push_notification_to_multiple(
+                        fcm_tokens=fcm_tokens,
+                        title=leave_title,
+                        body=leave_msg,
+                        data={
+                            "type": "PET_MEMBER_LEFT",
+                            "family_id": str(family_id),
+                            "pet_id": str(pet_id),
+                            "user_id": str(user.user_id),
+                        },
+                    )
+                    if result.get("invalid_tokens"):
+                        self.user_repo.remove_fcm_tokens(result["invalid_tokens"])
+                except Exception as e:
+                    print(f"[FCM] PET_MEMBER_LEFT push error: {e}")
 
             self.db.commit()
 
@@ -400,13 +459,7 @@ class PetModifyService:
                 .all()
             )
             member_user_ids = [m.user_id for m in family_members if m.user_id != user.user_id]
-
-            users = (
-                self.db.query(User)
-                .filter(User.user_id.in_(member_user_ids))
-                .all()
-            ) if member_user_ids else []
-            fcm_tokens = [u.fcm_token for u in users if u and u.fcm_token]
+            fcm_tokens = self.user_repo.get_active_fcm_tokens_for_users(member_user_ids)
 
             # 1️⃣ WalkTrackingPoint 삭제
             walk_ids = self.db.query(Walk.walk_id).filter(Walk.pet_id == pet_id).all()
@@ -505,7 +558,7 @@ class PetModifyService:
             # 🔔 FCM 푸시: 가족 전원에게 펫 삭제 알림 (OWNER는 제외)
             if fcm_tokens:
                 try:
-                    send_push_notification_to_multiple(
+                    result = send_push_notification_to_multiple(
                         fcm_tokens=fcm_tokens,
                         title="🐾 반려동물 삭제",
                         body=f"{pet_name}가 삭제되었습니다.",
@@ -516,6 +569,8 @@ class PetModifyService:
                             "pet_name": pet_name or ""
                         },
                     )
+                    if result.get("invalid_tokens"):
+                        self.user_repo.remove_fcm_tokens(result["invalid_tokens"])
                 except Exception as e:
                     print("FCM PET_DELETE ERROR:", e)
 
@@ -538,3 +593,53 @@ class PetModifyService:
                 }
             ),
         )
+
+    # --------------------------------------------------
+    # 📢 가족에게 펫 업데이트 알림 + 푸시 브로드캐스트
+    # --------------------------------------------------
+    def _broadcast_pet_update(
+        self,
+        pet: Pet,
+        actor: User,
+        message: str,
+        exclude_user_id: Optional[int] = None,
+    ):
+        family_members = (
+            self.db.query(FamilyMember)
+            .filter(FamilyMember.family_id == pet.family_id)
+            .all()
+        )
+        if not family_members:
+            return
+
+        notif = self.notif_repo.create_notification(
+            family_id=pet.family_id,
+            target_user_id=None,
+            related_pet_id=pet.pet_id,
+            related_user_id=actor.user_id,
+            notif_type=NotificationType.PET_UPDATE,
+            title="반려동물 정보 업데이트",
+            message=message,
+        )
+        self.db.flush()
+
+        target_ids = [
+            m.user_id for m in family_members
+            if exclude_user_id is None or m.user_id != exclude_user_id
+        ]
+        tokens = self.user_repo.get_active_fcm_tokens_for_users(target_ids)
+        if tokens:
+            result = send_push_notification_to_multiple(
+                fcm_tokens=tokens,
+                title="반려동물 정보 업데이트",
+                body=message,
+                data={
+                    "type": "PET_UPDATE",
+                    "family_id": str(pet.family_id),
+                    "pet_id": str(pet.pet_id),
+                    "actor_user_id": str(actor.user_id),
+                    "notification_id": str(notif.notification_id),
+                },
+            )
+            if result.get("invalid_tokens"):
+                self.user_repo.remove_fcm_tokens(result["invalid_tokens"])

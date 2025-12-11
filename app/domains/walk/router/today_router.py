@@ -4,8 +4,8 @@ from typing import Optional
 
 from app.db import get_db
 from app.domains.walk.service.today_service import TodayService
-from app.schemas.error_schema import ErrorResponse
 from app.schemas.walk.today_schema import TodayWalkResponse
+from app.domains.walk.exception import TODAY_RESPONSES
 
 
 router = APIRouter(
@@ -20,12 +20,7 @@ router = APIRouter(
     description="오늘 날짜 기준으로 반려동물의 산책 현황을 조회합니다.",
     status_code=200,
     response_model=TodayWalkResponse,
-    responses={
-        401: {"model": ErrorResponse, "description": "인증 실패"},
-        403: {"model": ErrorResponse, "description": "권한 없음"},
-        404: {"model": ErrorResponse, "description": "반려동물을 찾을 수 없음"},
-        500: {"model": ErrorResponse, "description": "서버 내부 오류"},
-    },
+    responses=TODAY_RESPONSES,
 )
 def get_today_walks(
     request: Request,

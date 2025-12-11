@@ -5,6 +5,7 @@ from datetime import datetime
 
 from app.db import get_db
 from app.domains.users.service.family_member_service import FamilyMemberService
+from app.domains.users.repository.user_repository import UserRepository
 from app.schemas.users.family_member_schema import FamilyMembersResponse
 from app.models.family_member import FamilyMember
 from app.models.user import User
@@ -50,16 +51,19 @@ async def debug_family_fcm_tokens(
         .all()
     )
     
+    user_repo = UserRepository(db)
     members_info = []
     for m in family_members:
         user = db.get(User, m.user_id)
         if user:
+            tokens = user_repo.get_active_fcm_tokens_for_users([user.user_id])
             members_info.append({
                 "user_id": user.user_id,
                 "nickname": user.nickname,
                 "role": m.role.value,
-                "has_fcm_token": user.fcm_token is not None,
-                "fcm_token_preview": user.fcm_token[:30] + "..." if user.fcm_token else None,
+                "legacy_fcm_token": user.fcm_token,
+                "tokens": tokens,
+                "token_count": len(tokens),
             })
         else:
             members_info.append({
@@ -67,7 +71,9 @@ async def debug_family_fcm_tokens(
                 "nickname": None,
                 "role": m.role.value,
                 "has_fcm_token": False,
-                "fcm_token_preview": None,
+                "legacy_fcm_token": None,
+                "tokens": [],
+                "token_count": 0,
                 "error": "User not found"
             })
     
@@ -75,7 +81,8 @@ async def debug_family_fcm_tokens(
         "success": True,
         "family_id": family_id,
         "total_members": len(family_members),
-        "members_with_fcm_token": sum(1 for m in members_info if m.get("has_fcm_token")),
+        "members_with_tokens": sum(1 for m in members_info if m.get("token_count", 0) > 0),
         "members": members_info,
         "timestamp": datetime.utcnow().isoformat(),
+        "note": "tokens come from user_fcm_tokens + legacy user.fcm_token; ensure both devices called /me/fcm-token"
     })
