@@ -11,6 +11,7 @@ from app.core.firebase import verify_firebase_token
 from app.core.error_handler import error_response
 from app.models.user import User
 from app.domains.pets.repository.pet_repository import PetRepository
+from app.domains.auth.repository.auth_repository import AuthRepository
 
 
 class MyPetsService:
@@ -56,7 +57,32 @@ class MyPetsService:
         )
 
         if not user:
-            return error_response(404, "MY_PETS_404_1", "해당 사용자를 찾을 수 없습니다.", path)
+            # 탈퇴 후 재로그인 등으로 DB에 유저가 없을 때 자동 생성
+            try:
+                provider = decoded.get("firebase", {}).get("sign_in_provider")
+                provider_map = {
+                    "google.com": "google",
+                    "apple.com": "apple",
+                    "oidc.kakao": "kakao",
+                    "custom": "kakao",
+                    "password": "email",
+                }
+                sns = provider_map.get(provider, "email")
+                nickname = decoded.get("name") or decoded.get("displayName") or f"user_{firebase_uid[:6]}"
+                email = decoded.get("email")
+                picture = decoded.get("picture")
+                auth_repo = AuthRepository(self.db)
+                user = auth_repo.create_user(
+                    firebase_uid=firebase_uid,
+                    nickname=nickname,
+                    email=email,
+                    profile_img_url=picture,
+                    sns=sns,
+                )
+            except Exception as e:
+                print("MY_PETS_CREATE_USER_ERROR:", e)
+                self.db.rollback()
+                return error_response(500, "MY_PETS_500_2", "사용자 정보를 생성하는 중 오류가 발생했습니다.", path)
 
         # ------------------------
         # 3) Pet 조회

@@ -6,6 +6,7 @@ from typing import Optional
 from app.core.firebase import verify_firebase_token
 from app.core.error_handler import error_response
 from app.domains.users.repository.user_repository import UserRepository
+from app.domains.auth.repository.auth_repository import AuthRepository
 
 from app.schemas.users.user_base_schema import UserBase
 from app.schemas.users.user_update_schema import UserUpdateRequest
@@ -44,7 +45,32 @@ class UserService:
         user = repo.get_user_by_firebase_uid(firebase_uid)
 
         if user is None:
-            return error_response(404, "USER_GET_404_1", "해당 사용자를 찾을 수 없습니다.", path)
+            # 탈퇴 후 재로그인 등으로 DB에 유저가 없을 경우 자동 생성
+            try:
+                provider = decoded.get("firebase", {}).get("sign_in_provider")
+                provider_map = {
+                    "google.com": "google",
+                    "apple.com": "apple",
+                    "oidc.kakao": "kakao",
+                    "custom": "kakao",
+                    "password": "email",
+                }
+                sns = provider_map.get(provider, "email")
+                nickname = decoded.get("name") or decoded.get("displayName") or f"user_{firebase_uid[:6]}"
+                email = decoded.get("email")
+                picture = decoded.get("picture")
+                auth_repo = AuthRepository(db)
+                user = auth_repo.create_user(
+                    firebase_uid=firebase_uid,
+                    nickname=nickname,
+                    email=email,
+                    profile_img_url=picture,
+                    sns=sns,
+                )
+            except Exception as e:
+                print("USER_GET_CREATE_ERROR:", e)
+                db.rollback()
+                return error_response(500, "USER_GET_500_2", "사용자 정보를 생성하는 중 오류가 발생했습니다.", path)
 
         # 4) Pydantic 스키마 변환
         user_schema = UserBase(
@@ -100,7 +126,32 @@ class UserService:
         user = repo.get_user_by_firebase_uid(firebase_uid)
 
         if user is None:
-            return error_response(404, "USER_EDIT_404_1", "해당 사용자를 찾을 수 없습니다.", path)
+            # 사용자 없으면 자동 생성
+            try:
+                provider = decoded.get("firebase", {}).get("sign_in_provider")
+                provider_map = {
+                    "google.com": "google",
+                    "apple.com": "apple",
+                    "oidc.kakao": "kakao",
+                    "custom": "kakao",
+                    "password": "email",
+                }
+                sns = provider_map.get(provider, "email")
+                nickname = decoded.get("name") or decoded.get("displayName") or f"user_{firebase_uid[:6]}"
+                email = decoded.get("email")
+                picture = decoded.get("picture")
+                auth_repo = AuthRepository(db)
+                user = auth_repo.create_user(
+                    firebase_uid=firebase_uid,
+                    nickname=nickname,
+                    email=email,
+                    profile_img_url=picture,
+                    sns=sns,
+                )
+            except Exception as e:
+                print("USER_EDIT_CREATE_ERROR:", e)
+                db.rollback()
+                return error_response(500, "USER_EDIT_500_2", "사용자 정보를 생성하는 중 오류가 발생했습니다.", path)
 
         # 4) Body 검증
         if not body or (body.nickname is None and body.phone is None):
@@ -177,7 +228,32 @@ class UserService:
         user = repo.get_user_by_firebase_uid(firebase_uid)
 
         if user is None:
-            return error_response(404, "FCM_404_1", "해당 사용자를 찾을 수 없습니다.", path)
+            # 사용자 없으면 자동 생성
+            try:
+                provider = decoded.get("firebase", {}).get("sign_in_provider")
+                provider_map = {
+                    "google.com": "google",
+                    "apple.com": "apple",
+                    "oidc.kakao": "kakao",
+                    "custom": "kakao",
+                    "password": "email",
+                }
+                sns = provider_map.get(provider, "email")
+                nickname = decoded.get("name") or decoded.get("displayName") or f"user_{firebase_uid[:6]}"
+                email = decoded.get("email")
+                picture = decoded.get("picture")
+                auth_repo = AuthRepository(db)
+                user = auth_repo.create_user(
+                    firebase_uid=firebase_uid,
+                    nickname=nickname,
+                    email=email,
+                    profile_img_url=picture,
+                    sns=sns,
+                )
+            except Exception as e:
+                print("FCM_CREATE_ERROR:", e)
+                db.rollback()
+                return error_response(500, "FCM_500_2", "사용자 정보를 생성하는 중 오류가 발생했습니다.", path)
 
         # 4) FCM 토큰 업데이트
         try:
